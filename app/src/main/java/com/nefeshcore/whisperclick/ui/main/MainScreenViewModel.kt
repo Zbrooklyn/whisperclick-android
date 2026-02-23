@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard.ui.main
+package com.nefeshcore.whisperclick.ui.main
 
 import android.app.Application
 import android.content.Context
@@ -14,10 +14,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.whispercpp.whisper.WhisperContext
-import kaizo.co.WhisperVoiceKeyboard.R
-import kaizo.co.WhisperVoiceKeyboard.media.decodeShortArray
-import kaizo.co.WhisperVoiceKeyboard.media.decodeWaveFile
-import kaizo.co.WhisperVoiceKeyboard.recorder.Recorder
+import com.nefeshcore.whisperclick.R
+import com.nefeshcore.whisperclick.media.decodeShortArray
+import com.nefeshcore.whisperclick.media.decodeWaveFile
+import com.nefeshcore.whisperclick.recorder.Recorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch

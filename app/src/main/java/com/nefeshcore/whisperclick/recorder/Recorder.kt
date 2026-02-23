@@ -1,10 +1,10 @@
-package kaizo.co.WhisperVoiceKeyboard.recorder
+package com.nefeshcore.whisperclick.recorder
 
 import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import kaizo.co.WhisperVoiceKeyboard.media.encodeWaveFile
+import com.nefeshcore.whisperclick.media.encodeWaveFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher

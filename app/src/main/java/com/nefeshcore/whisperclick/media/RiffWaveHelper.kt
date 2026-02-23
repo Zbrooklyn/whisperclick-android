@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard.media
+package com.nefeshcore.whisperclick.media
 
 import java.io.ByteArrayOutputStream
 import java.io.File

@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard
+package com.nefeshcore.whisperclick
 
 import android.annotation.SuppressLint
 import android.os.Handler
@@ -35,7 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kaizo.co.WhisperVoiceKeyboard.ui.theme.KaiboardTheme
+import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
 import kotlinx.coroutines.flow.collectLatest
 
 

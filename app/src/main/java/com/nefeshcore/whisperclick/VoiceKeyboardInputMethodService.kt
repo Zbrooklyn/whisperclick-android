@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard
+package com.nefeshcore.whisperclick
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -22,9 +22,9 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.whispercpp.whisper.WhisperContext
-import kaizo.co.WhisperVoiceKeyboard.media.decodeShortArray
-import kaizo.co.WhisperVoiceKeyboard.media.decodeWaveFile
-import kaizo.co.WhisperVoiceKeyboard.recorder.Recorder
+import com.nefeshcore.whisperclick.media.decodeShortArray
+import com.nefeshcore.whisperclick.media.decodeWaveFile
+import com.nefeshcore.whisperclick.recorder.Recorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard.ui.theme
+package com.nefeshcore.whisperclick.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard.ui.main
+package com.nefeshcore.whisperclick.ui.main
 
 import android.content.Context
 import android.content.Intent
@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import kaizo.co.WhisperVoiceKeyboard.R
+import com.nefeshcore.whisperclick.R
 
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel) {

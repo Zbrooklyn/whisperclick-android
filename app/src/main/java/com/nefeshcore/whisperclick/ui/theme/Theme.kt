@@ -1,4 +1,4 @@
-package kaizo.co.WhisperVoiceKeyboard.ui.theme
+package com.nefeshcore.whisperclick.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
