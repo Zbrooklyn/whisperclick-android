@@ -22,17 +22,20 @@ object GeminiClient {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
 
-                val prompt = "Rewrite the following text to be $style. Output ONLY the rewritten text:
+                val promptText = when (style) {
+                    "Emojify" -> "Rewrite the following text by adding relevant emojis. Keep the meaning the same. Output ONLY the rewritten text:\n\n$originalText"
+                    "Fix Grammar" -> "Fix the grammar and spelling of the following text. Output ONLY the corrected text:\n\n$originalText"
+                    "Concise" -> "Rewrite the following text to be more concise. Output ONLY the rewritten text:\n\n$originalText"
+                    else -> "Rewrite the following text to be $style. Output ONLY the rewritten text:\n\n$originalText"
+                }
 
-$originalText"
-                
                 val jsonBody = JSONObject()
                 val contents = JSONArray()
                 val contentPart = JSONObject()
                 val parts = JSONArray()
                 val textPart = JSONObject()
                 
-                textPart.put("text", prompt)
+                textPart.put("text", promptText)
                 parts.put(textPart)
                 contentPart.put("parts", parts)
                 contents.put(contentPart)
