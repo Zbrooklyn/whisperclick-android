@@ -1,46 +1,44 @@
-# Kaiboard
+# WhisperClick Android 🖱️✨
 
-<a href="https://play.google.com/store/apps/details?id=kaizo.co.WhisperVoiceKeyboard">
-  <img src="https://cdn.rawgit.com/steverichey/google-play-badge-svg/master/img/en_get.svg" width="25%" alt="Download Kaiboard from Google Play">
-</a>
+**WhisperClick** is an open-source Android keyboard that combines privacy-first voice typing (Whisper) with powerful AI text refinement (Gemini).
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/kaisoapbox)
+## Features
 
-## _The best Android keyboard for offline speech recognition_
+### 🎙️ Whisper Voice Typing
+*   **Offline:** Runs entirely on-device using `whisper.cpp`.
+*   **Private:** No audio ever leaves your phone.
+*   **Accurate:** Uses OpenAI's Whisper model for superior transcription.
 
-The power of OpenAI's Whisper model at your fingertips, anywhere, anytime. A native Android keyboard
-using [whisper.cpp](https://github.com/ggerganov/whisper.cpp/) for speech transcription. No servers,
-full privacy.
+### ✨ Magic Rewrite
+*   **AI-Powered:** Instantly rewrite your text using Google Gemini.
+*   **Styles:**
+    *   **Fix Grammar:** Correct mistakes without changing the tone.
+    *   **Professional:** Make it sound like a CEO.
+    *   **Casual:** Make it sound like a text to a friend.
+    *   **Concise:** Shorten it.
+    *   **Emojify:** Add relevant emojis. 🤠
 
-This project is developed and maintained with ❤️ by [Kai](https://kaisoapbox.com/).
+## Setup
 
-## How to Run
+1.  **Install:** Download the APK from the [Releases](https://github.com/Zbrooklyn/whisperclick-android/releases) page.
+2.  **Enable:** Go to `Settings > System > Languages & input > On-screen keyboard` and enable **WhisperClick**.
+3.  **API Key:**
+    *   Open the **WhisperClick App** (launcher icon).
+    *   Scroll down to **Advanced**.
+    *   Enter your **Gemini API Key** (Get one from [Google AI Studio](https://aistudio.google.com/)).
+4.  **Download Model:** The app will download the Whisper model on first run (approx 40MB).
 
-Add the model you want to use under `app/src/main/assets/models/` (e.g. `ggml-tiny.en.bin`). Then,
-just open the project in Android Studio, and it should work!
+## Development
 
-## Build
+### Build
+This project uses GitHub Actions for CI/CD.
+*   **Push to `main`:** Triggers a debug build.
+*   **Artifacts:** Download the APK from the Actions tab.
 
-Select the "release" active build variant, and use Android Studio to run and deploy to your device.
+### Tech Stack
+*   **Language:** Kotlin + C++ (JNI)
+*   **UI:** Jetpack Compose
+*   **AI Engine:** `whisper.cpp` (Local) + Gemini API (Cloud)
 
-You can use Android Studio to generate a signed app bundle for Google Play deployment (you will
-need/create your own signing key) under `Build -> Generate Signed App Bundle or APK`.
-
-## Roadmap
-
-- [ x ] Pause playing media
-- [ x ] Realtime transcription (partial success)
-- [ ] Model and language selection
-- [ ] Local logging to assist debugging
-- [ ] Transcribe any provided file
-- [ ] Setting to save audio recordings as files
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Acknowledgements
-
-Many thanks to [Michael McCulloch](https://github.com/MichaelMcCulloch/WhisperVoiceKeyboard) for his
-first version of the keyboard, and to all the folks working
-on [whisper.cpp](https://github.com/ggerganov/whisper.cpp/), without whom this app would not exist.
+## License
+BSD-3-Clause
