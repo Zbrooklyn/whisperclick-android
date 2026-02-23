@@ -21,6 +21,8 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -91,6 +93,12 @@ private fun MainScreen(
             sharedPref.getBoolean(pauseMediaStr, false)
         )
     }
+    
+    var apiKey by remember {
+        mutableStateOf(
+            sharedPref.getString("gemini_api_key", "") ?: ""
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -110,6 +118,30 @@ private fun MainScreen(
             item { PermissionButton() }
             item { MoreButton() }
             item { SectionHeader(stringResource(R.string.advanced_header), bp = 4.dp) }
+            
+            // API Key Input
+            item {
+                ListItem(
+                    headlineContent = { Text("Gemini API Key") },
+                    leadingContent = { Icon(Icons.Outlined.Key, null) },
+                    supportingContent = {
+                        OutlinedTextField(
+                            value = apiKey,
+                            onValueChange = { 
+                                apiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("gemini_api_key", it)
+                                    apply()
+                                }
+                            },
+                            label = { Text("Enter API Key") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                    }
+                )
+            }
+
             item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.num_threads_option)) },

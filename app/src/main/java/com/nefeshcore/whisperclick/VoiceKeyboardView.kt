@@ -35,6 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nefeshcore.whisperclick.ui.MagicMenu
 import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
 import kotlinx.coroutines.flow.collectLatest
 
@@ -49,6 +50,18 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
 
     @Composable
     override fun Content() {
+        var showMagicMenu by remember { mutableStateOf(false) }
+
+        if (showMagicMenu) {
+            MagicMenu(
+                onDismiss = { showMagicMenu = false },
+                onOptionSelected = { style ->
+                    showMagicMenu = false
+                    service.performRewrite(style)
+                }
+            )
+        }
+
         KaiboardTheme {
             Row {
                 RecordButton(
@@ -64,7 +77,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                 // Magic Rewrite Button
                 if (!service.isRecording) {
                     Button(
-                        onClick = { service.showMagicMenu() },
+                        onClick = { showMagicMenu = true },
                         modifier = Modifier
                             .padding(padding)
                             .defaultMinSize(minWidth = minSize),

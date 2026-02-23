@@ -108,19 +108,40 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     // --- Magic Rewrite Feature ---
-    fun showMagicMenu() {
-        Log.d(LOG_TAG, "Magic Menu Triggered")
+    fun performRewrite(style: String) {
+        Log.d(LOG_TAG, "Magic Rewrite Triggered: $style")
         
         val ic = currentInputConnection ?: return
-        val textBefore = ic.getTextBeforeCursor(200, 0)?.toString() ?: ""
+        val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
         
         if (textBefore.isEmpty()) {
             Log.d(LOG_TAG, "No text to rewrite")
             return
         }
 
-        // Placeholder for MVP
-        Log.d(LOG_TAG, "Would rewrite: $textBefore")
+        scope.launch {
+            val apiKey = sharedPref.getString("gemini_api_key", "") ?: ""
+            
+            if (apiKey.isEmpty()) {
+                Log.w(LOG_TAG, "API Key not set in settings")
+                withContext(Dispatchers.Main) {
+                    ic.commitText("[Error: Set Gemini API Key in Settings]", 1)
+                }
+                return@launch
+            }
+            
+            // Call Gemini
+            val rewritten = com.nefeshcore.whisperclick.api.GeminiClient.rewriteText(apiKey, textBefore, style)
+            
+            if (rewritten.isNotEmpty() && rewritten != textBefore) {
+                withContext(Dispatchers.Main) {
+                    // Delete old text
+                    ic.deleteSurroundingText(textBefore.length, 0)
+                    // Insert new text
+                    ic.commitText(rewritten, 1)
+                }
+            }
+        }
     }
     // -----------------------------
 
