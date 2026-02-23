@@ -120,7 +120,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         }
 
         scope.launch {
-            val apiKey = sharedPref.getString("gemini_api_key", "") ?: ""
+            val apiKey = sharedPref?.getString("gemini_api_key", "") ?: ""
             
             if (apiKey.isEmpty()) {
                 Log.w(LOG_TAG, "API Key not set in settings")
