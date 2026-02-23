@@ -107,6 +107,23 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
 
+    // --- Magic Rewrite Feature ---
+    fun showMagicMenu() {
+        Log.d(LOG_TAG, "Magic Menu Triggered")
+        
+        val ic = currentInputConnection ?: return
+        val textBefore = ic.getTextBeforeCursor(200, 0)?.toString() ?: ""
+        
+        if (textBefore.isEmpty()) {
+            Log.d(LOG_TAG, "No text to rewrite")
+            return
+        }
+
+        // Placeholder for MVP
+        Log.d(LOG_TAG, "Would rewrite: $textBefore")
+    }
+    // -----------------------------
+
     // SaveStateRegistry Methods
     private val savedStateRegistryCtrl = SavedStateRegistryController.create(this)
     override val savedStateRegistry: SavedStateRegistry = savedStateRegistryCtrl.savedStateRegistry

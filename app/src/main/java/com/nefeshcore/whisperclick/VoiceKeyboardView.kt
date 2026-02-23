@@ -60,6 +60,24 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         .padding(padding),
                     shape = shape,
                 )
+                
+                // Magic Rewrite Button
+                if (!service.isRecording) {
+                    Button(
+                        onClick = { service.showMagicMenu() },
+                        modifier = Modifier
+                            .padding(padding)
+                            .defaultMinSize(minWidth = minSize),
+                        shape = shape,
+                        contentPadding = PaddingValues(horizontal = contentPad),
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_magic_sparkle),
+                            "Magic Rewrite"
+                        )
+                    }
+                }
+
                 if (service.isRecording) {
                     CancelButton(
                         onClick = service::cancelRecord,
