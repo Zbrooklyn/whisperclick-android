@@ -1,6 +1,6 @@
 package com.nefeshcore.whisperclick.api
 
-import android.util.Log
+import com.nefeshcore.whisperclick.utils.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -50,11 +50,12 @@ object GeminiClient {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
                     parseResponse(response)
                 } else {
-                    Log.e(TAG, "Error: $responseCode")
-                    originalText // Return original on error
+                    val errorBody = try { connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "no body" } catch (_: Exception) { "unreadable" }
+                    AppLog.log("Gemini", "HTTP $responseCode: $errorBody")
+                    originalText
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Exception: ${e.message}")
+                AppLog.log("Gemini", "ERROR: ${e.javaClass.simpleName}: ${e.message}")
                 originalText
             }
         }
@@ -68,7 +69,7 @@ object GeminiClient {
             val parts = content.getJSONArray("parts")
             parts.getJSONObject(0).getString("text").trim()
         } catch (e: Exception) {
-            Log.e(TAG, "Parse Error: ${e.message}")
+            AppLog.log("Gemini", "Parse error: ${e.message}")
             ""
         }
     }

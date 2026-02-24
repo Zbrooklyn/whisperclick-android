@@ -15,6 +15,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.whispercpp.whisper.WhisperContext
 import com.nefeshcore.whisperclick.R
+import com.nefeshcore.whisperclick.utils.AppLog
 import com.nefeshcore.whisperclick.media.decodeShortArray
 import com.nefeshcore.whisperclick.media.decodeWaveFile
 import com.nefeshcore.whisperclick.recorder.Recorder
@@ -68,6 +69,7 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
 
     private suspend fun printMessage(msg: String) = withContext(Dispatchers.Main) {
         dataLog += msg
+        AppLog.log("Settings", msg.trimEnd('\n'))
     }
 
     private suspend fun loadBaseModel() = withContext(Dispatchers.IO) {

@@ -6,7 +6,6 @@ import android.inputmethodservice.InputMethodService
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -25,6 +24,7 @@ import com.whispercpp.whisper.WhisperContext
 import com.nefeshcore.whisperclick.media.decodeShortArray
 import com.nefeshcore.whisperclick.media.decodeWaveFile
 import com.nefeshcore.whisperclick.recorder.Recorder
+import com.nefeshcore.whisperclick.utils.AppLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -109,37 +109,44 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
     // --- Magic Rewrite Feature ---
     fun performRewrite(style: String) {
-        Log.d(LOG_TAG, "Magic Rewrite Triggered: $style")
-        
-        val ic = currentInputConnection ?: return
-        val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
-        
-        if (textBefore.isEmpty()) {
-            Log.d(LOG_TAG, "No text to rewrite")
+        AppLog.log("Rewrite", "Triggered: style=$style")
+
+        val ic = currentInputConnection ?: run {
+            AppLog.log("Rewrite", "ERROR: No InputConnection")
             return
         }
+        val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
+
+        if (textBefore.isEmpty()) {
+            AppLog.log("Rewrite", "No text to rewrite")
+            return
+        }
+        AppLog.log("Rewrite", "Input: ${textBefore.take(80)}${if (textBefore.length > 80) "..." else ""}")
 
         scope.launch {
             val apiKey = sharedPref?.getString("gemini_api_key", "") ?: ""
-            
+
             if (apiKey.isEmpty()) {
-                Log.w(LOG_TAG, "API Key not set in settings")
+                AppLog.log("Rewrite", "ERROR: API Key not set")
                 withContext(Dispatchers.Main) {
                     ic.commitText("[Error: Set Gemini API Key in Settings]", 1)
                 }
                 return@launch
             }
-            
-            // Call Gemini
+
+            AppLog.log("Rewrite", "Calling Gemini API...")
+            val start = System.currentTimeMillis()
             val rewritten = com.nefeshcore.whisperclick.api.GeminiClient.rewriteText(apiKey, textBefore, style)
-            
+            val elapsed = System.currentTimeMillis() - start
+
             if (rewritten.isNotEmpty() && rewritten != textBefore) {
+                AppLog.log("Rewrite", "Done (${elapsed}ms): ${rewritten.take(80)}${if (rewritten.length > 80) "..." else ""}")
                 withContext(Dispatchers.Main) {
-                    // Delete old text
                     ic.deleteSurroundingText(textBefore.length, 0)
-                    // Insert new text
                     ic.commitText(rewritten, 1)
                 }
+            } else {
+                AppLog.log("Rewrite", "No change returned (${elapsed}ms)")
             }
         }
     }
@@ -187,7 +194,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     private fun printMessage(msg: String) {
-        Log.d(LOG_TAG, msg)
+        AppLog.log("Keyboard", msg.trimEnd('\n'))
     }
 
     private suspend fun copyAssets() = withContext(Dispatchers.IO) {
@@ -312,6 +319,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     fun toggleRecord() = scope.launch {
         try {
             if (isRecording) {
+                AppLog.log("Keyboard", "Recording stopped")
                 if (checkBoolPref(R.string.pause_media) == true) {
                     focusRequest.let { audioManager.abandonAudioFocusRequest(it) }
                 }
@@ -332,6 +340,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 trailing = null
                 val file = getTempFileForRecording()
                 recorder.startRecording(file, onError, transcriptionCallback)
+                AppLog.log("Keyboard", "Recording started")
                 isRecording = true
                 recordedFile = file
                 // if not preceded by empty space, commit empty space

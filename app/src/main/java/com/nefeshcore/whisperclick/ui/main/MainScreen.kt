@@ -1,8 +1,11 @@
 package com.nefeshcore.whisperclick.ui.main
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -12,6 +15,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Mic
@@ -21,17 +27,18 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material.icons.outlined.Key
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +57,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.nefeshcore.whisperclick.R
+import com.nefeshcore.whisperclick.utils.AppLog
 
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel) {
@@ -224,7 +232,7 @@ private fun MainScreen(
                     enabled = canTranscribe, isRecording = isRecording, onClick = onRecordTapped
                 )
             }
-            item { MessageLog(messageLog) }
+            item { AppLogSection() }
         }
     }
 }
@@ -243,8 +251,36 @@ private fun SectionHeader(header: String, tp: Dp = 16.dp, bp: Dp = 0.dp) {
 
 
 @Composable
-private fun MessageLog(log: String) {
-    SelectionContainer(modifier = Modifier.padding(16.dp)) { Text(log) }
+private fun AppLogSection() {
+    val logText by AppLog.log.collectAsState()
+    val context = LocalContext.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Log", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Row {
+            IconButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("WhisperClick Log", logText))
+                Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(Icons.Outlined.ContentCopy, "Copy log")
+            }
+            IconButton(onClick = { AppLog.clear() }) {
+                Icon(Icons.Outlined.Delete, "Clear log")
+            }
+        }
+    }
+    SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Text(
+            text = logText.ifEmpty { "(no log entries yet)" },
+            fontSize = 12.sp,
+            lineHeight = 16.sp
+        )
+    }
 }
 
 @Composable
