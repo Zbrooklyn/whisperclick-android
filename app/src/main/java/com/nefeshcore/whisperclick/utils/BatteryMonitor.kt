@@ -23,11 +23,11 @@ object BatteryMonitor {
         val durationSec = (endTime - startTime) / 1000
         val drop = startLevel - endLevel
         
-        val report = "Battery Usage Report:
+        val report = """Battery Usage Report:
 Duration: ${durationSec}s
 Drop: $drop%
 Start: $startLevel%
-End: $endLevel%"
+End: $endLevel%""".trimIndent()
         Log.d(TAG, report)
         return report
     }
