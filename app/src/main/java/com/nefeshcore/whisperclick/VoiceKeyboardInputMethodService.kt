@@ -378,7 +378,12 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun switchKeyboard() {
-        switchToNextInputMethod(false)
+        val preferredIme = sharedPref?.getString("preferred_keyboard", "") ?: ""
+        if (preferredIme.isNotEmpty()) {
+            switchInputMethod(preferredIme)
+        } else {
+            switchToNextInputMethod(false)
+        }
     }
 }
 

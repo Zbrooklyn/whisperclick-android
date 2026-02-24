@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -124,6 +125,7 @@ private fun MainScreen(
             item { SectionHeader(stringResource(R.string.setup_header)) }
             item { InputMethodButton() }
             item { PermissionButton() }
+            item { KeyboardPickerItem(sharedPref) }
             item { MoreButton() }
             item { SectionHeader(stringResource(R.string.advanced_header), bp = 4.dp) }
             
@@ -354,6 +356,74 @@ private fun PermissionButton() {
     )
 }
 
+@Composable
+private fun KeyboardPickerItem(sharedPref: android.content.SharedPreferences) {
+    val context = LocalContext.current
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val enabledImes = imm.enabledInputMethodList
+    val ownPackage = context.packageName
+
+    // Filter out WhisperClick itself
+    val otherImes = enabledImes.filter { it.packageName != ownPackage }
+
+    var selectedId by remember {
+        mutableStateOf(sharedPref.getString("preferred_keyboard", "") ?: "")
+    }
+    var expanded by remember { mutableStateOf(false) }
+
+    val selectedLabel = otherImes.find { it.id == selectedId }
+        ?.loadLabel(context.packageManager)?.toString() ?: "Auto (next keyboard)"
+
+    ListItem(
+        headlineContent = { Text("Switch-to Keyboard") },
+        leadingContent = { Icon(Icons.Outlined.Keyboard, null) },
+        supportingContent = { Text(selectedLabel) },
+        trailingContent = {
+            Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
+        },
+        modifier = Modifier.clickable { expanded = true }
+    )
+
+    if (expanded) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { expanded = false },
+            title = { Text("Choose keyboard") },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    item {
+                        ListItem(
+                            headlineContent = { Text("Auto (next keyboard)") },
+                            modifier = Modifier.clickable {
+                                selectedId = ""
+                                with(sharedPref.edit()) {
+                                    putString("preferred_keyboard", "")
+                                    apply()
+                                }
+                                expanded = false
+                            }
+                        )
+                    }
+                    items(otherImes.size) { index ->
+                        val ime = otherImes[index]
+                        val label = ime.loadLabel(context.packageManager).toString()
+                        ListItem(
+                            headlineContent = { Text(label) },
+                            modifier = Modifier.clickable {
+                                selectedId = ime.id
+                                with(sharedPref.edit()) {
+                                    putString("preferred_keyboard", ime.id)
+                                    apply()
+                                }
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
 
 @Composable
 private fun BenchmarkButton(enabled: Boolean, onClick: () -> Unit) {
