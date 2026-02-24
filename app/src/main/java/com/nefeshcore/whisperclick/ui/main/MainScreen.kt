@@ -282,7 +282,7 @@ private fun MoreButton() {
             )
         },
         leadingContent = { Icon(Icons.Outlined.Star, null) },
-        modifier = Modifier.clickable(onClick = { uriHandler.openUri("https://kaisoapbox.com") })
+        modifier = Modifier.clickable(onClick = { uriHandler.openUri("https://github.com/Zbrooklyn/whisperclick-android") })
     )
 }
 
