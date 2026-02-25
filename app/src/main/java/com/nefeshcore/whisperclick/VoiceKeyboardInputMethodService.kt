@@ -20,7 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
@@ -39,7 +42,7 @@ import java.io.File
 private const val LOG_TAG = "VoiceKeyboardInputMethodService"
 
 class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
-    SavedStateRegistryOwner {
+    ViewModelStoreOwner, SavedStateRegistryOwner {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.Main + job)
 
@@ -100,10 +103,17 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         val view = VoiceKeyboardView(this)
         window?.window?.decorView?.let { decorView ->
             decorView.setViewTreeLifecycleOwner(this)
+            decorView.setViewTreeViewModelStoreOwner(this)
             decorView.setViewTreeSavedStateRegistryOwner(this)
         }
+        view.setViewTreeLifecycleOwner(this)
+        view.setViewTreeViewModelStoreOwner(this)
+        view.setViewTreeSavedStateRegistryOwner(this)
         return view
     }
+
+    // ViewModelStore (required for Compose in IME)
+    override val viewModelStore: ViewModelStore = ViewModelStore()
 
     // Lifecycle Methods
     private var lifecycleRegistry: LifecycleRegistry = LifecycleRegistry(this)
@@ -401,7 +411,11 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     // for keys — supports optional meta keys (e.g. CTRL for undo)
     fun sendKeyPress(key: Int, meta: Int = 0) {
         haptic()
-        val ic = currentInputConnection ?: return
+        val ic = currentInputConnection
+        if (ic == null) {
+            AppLog.log("Keyboard", "sendKeyPress(key=$key) SKIPPED — no InputConnection")
+            return
+        }
         ic.sendKeyEvent(
             KeyEvent(0, 0, KeyEvent.ACTION_DOWN, key, 0, meta)
         )
@@ -414,7 +428,11 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     fun sendEnter() {
         haptic()
         val ei = currentEditorInfo
-        val ic = currentInputConnection ?: return
+        val ic = currentInputConnection
+        if (ic == null) {
+            AppLog.log("Keyboard", "sendEnter SKIPPED — no InputConnection")
+            return
+        }
         if (ei != null) {
             val action = ei.imeOptions and EditorInfo.IME_MASK_ACTION
             if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
