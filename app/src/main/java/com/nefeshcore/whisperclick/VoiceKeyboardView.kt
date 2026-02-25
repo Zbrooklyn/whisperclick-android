@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.KeyboardVoice
 import androidx.compose.material.icons.outlined.Redo
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.Undo
@@ -190,6 +191,18 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                             )
                         }) {
                             Icon(Icons.Outlined.Redo, "Redo")
+                        }
+                        // Small settings button
+                        OutlinedButton(
+                            onClick = { service.openSettings() },
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .height(36.dp)
+                                .padding(horizontal = 2.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(0.dp),
+                        ) {
+                            Icon(Icons.Outlined.Settings, "Settings")
                         }
                     }
                 }

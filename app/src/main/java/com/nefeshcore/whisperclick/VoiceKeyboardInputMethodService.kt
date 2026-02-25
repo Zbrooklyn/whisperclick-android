@@ -440,6 +440,12 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         }
     }
 
+    fun openSettings() {
+        val intent = android.content.Intent(this, MainActivity::class.java)
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+    }
+
     fun toggleSttMode() {
         haptic()
         useCloudStt = !useCloudStt
