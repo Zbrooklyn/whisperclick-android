@@ -95,7 +95,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                 }
 
                 // Row 1: Main keyboard bar
-                Row {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     RecordButton(
                         enabled = service.canTranscribe,
                         isRecording = service.isRecording,
@@ -103,7 +103,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         onClick = service::toggleRecord,
                         onCancel = service::cancelTranscription,
                         modifier = Modifier
-                            .weight(1f, true)
+                            .weight(2f)
                             .height(56.dp)
                             .padding(btnPad),
                         shape = shape,
@@ -111,8 +111,8 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     RepeatKeyButton(
                         onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DPAD_LEFT) },
                         modifier = Modifier
-                            .padding(btnPad)
-                            .defaultMinSize(minWidth = minSize),
+                            .weight(1f)
+                            .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
                     ) {
@@ -121,8 +121,8 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     RepeatKeyButton(
                         onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DPAD_RIGHT) },
                         modifier = Modifier
-                            .padding(btnPad)
-                            .defaultMinSize(minWidth = minSize),
+                            .weight(1f)
+                            .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
                     ) {
@@ -131,8 +131,8 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     RepeatKeyButton(
                         onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DEL) },
                         modifier = Modifier
-                            .padding(btnPad)
-                            .defaultMinSize(minWidth = minSize),
+                            .weight(1f)
+                            .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
                     ) {
@@ -144,8 +144,8 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     Button(
                         onClick = { service.sendKeyPress(KeyEvent.KEYCODE_ENTER) },
                         modifier = Modifier
-                            .padding(btnPad)
-                            .defaultMinSize(minWidth = minSize),
+                            .weight(1f)
+                            .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
                     ) {
@@ -164,8 +164,8 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         },
                         onLongPress = { showEditRow = !showEditRow },
                         modifier = Modifier
-                            .padding(btnPad)
-                            .defaultMinSize(minWidth = minSize),
+                            .weight(1f)
+                            .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
                     ) {
