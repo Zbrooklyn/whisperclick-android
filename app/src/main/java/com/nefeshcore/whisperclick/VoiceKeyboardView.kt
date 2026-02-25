@@ -31,7 +31,9 @@ import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
@@ -137,13 +139,14 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                             .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
+                        tonal = true,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Outlined.Backspace,
                             stringResource(R.string.delete_button)
                         )
                     }
-                    Button(
+                    FilledTonalButton(
                         onClick = { service.sendKeyPress(KeyEvent.KEYCODE_ENTER) },
                         modifier = Modifier
                             .weight(1f)
@@ -189,7 +192,7 @@ private fun RowScope.EditButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    Button(
+    OutlinedButton(
         onClick = onClick,
         modifier = Modifier
             .weight(1f)
@@ -207,6 +210,7 @@ private fun RepeatKeyButton(
     modifier: Modifier,
     shape: Shape,
     contentPadding: PaddingValues,
+    tonal: Boolean = false,
     repeatDelayMs: Long = 50,
     content: @Composable () -> Unit
 ) {
@@ -236,14 +240,22 @@ private fun RepeatKeyButton(
             }
         }
     }
-    Button(
-        onClick = {},
-        interactionSource = interactionSource,
-        modifier = modifier,
-        shape = shape,
-        contentPadding = contentPadding
-    ) {
-        content()
+    if (tonal) {
+        FilledTonalButton(
+            onClick = {},
+            interactionSource = interactionSource,
+            modifier = modifier,
+            shape = shape,
+            contentPadding = contentPadding
+        ) { content() }
+    } else {
+        OutlinedButton(
+            onClick = {},
+            interactionSource = interactionSource,
+            modifier = modifier,
+            shape = shape,
+            contentPadding = contentPadding
+        ) { content() }
     }
 }
 
@@ -275,7 +287,7 @@ private fun LongPressButton(
         }
     }
 
-    Button(
+    OutlinedButton(
         onClick = { if (!longPressTriggered) onTap() },
         interactionSource = interactionSource,
         modifier = modifier,
