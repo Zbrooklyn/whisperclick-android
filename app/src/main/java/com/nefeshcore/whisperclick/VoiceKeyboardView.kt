@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.ui.unit.Dp
@@ -70,7 +72,11 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
         var showEditRow by remember { mutableStateOf(false) }
 
         KaiboardTheme {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(vertical = 4.dp)
+            ) {
                 // Row 1: Main keyboard bar
                 Row(modifier = Modifier.fillMaxWidth()) {
                     RecordButton(
@@ -196,9 +202,10 @@ private fun RowScope.EditButton(
         onClick = onClick,
         modifier = Modifier
             .weight(1f)
-            .padding(2.dp),
+            .height(36.dp)
+            .padding(horizontal = 2.dp),
         shape = RoundedCornerShape(8.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp),
     ) {
         content()
     }
