@@ -11,8 +11,8 @@
     <string name="permission_granted">Permission granted!</string>
     <string name="input_method_button">Enable WhisperClick</string>
     <string name="input_method_description">Enable in input method settings</string>
-    <string name="support_text">Consider supporting Kai on Ko-Fi!</string>
-    <string name="more_button">More by Kai</string>
+    <string name="support_text">Star us on GitHub</string>
+    <string name="more_button">WhisperClick on GitHub</string>
     <string name="setup_header">Essential Setup</string>
     <string name="advanced_header">Advanced</string>
     <string name="return_button">Return</string>
