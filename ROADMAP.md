@@ -5,7 +5,7 @@
 
 ---
 
-## Current State: v0.9.0-beta
+## Current State: v0.9.1-beta
 
 ### What Works
 - On-device transcription via whisper.cpp v1.8.3 (Q5_1 quantized models)
@@ -15,33 +15,44 @@
 - Model download with resume support (7 models from Hugging Face)
 - API key validation for OpenAI and Gemini
 - Theme support (Light / Dark / OLED)
-- Settings UI with branded layout, status indicators, in-app log
+- Settings UI with logical grouping, dynamic sections, collapsible debug
 - CPU variant detection (ARM64 FP16, ARMv7 VFPv4)
 - Haptic feedback, audio focus management
+- On-device crash logger with in-app viewer
+- Versioned APK filenames + GitHub Releases (direct APK download)
+- Version displayed from BuildConfig (auto-updates with builds)
+- Log deduplication (suppresses repeated messages)
 
 ### What's Missing
 No text keyboard, no punctuation/numbers/emoji, no VAD, no streaming,
-no tests, plaintext API key storage, empty ProGuard rules, no accessibility labels.
+no tests, plaintext API key storage, empty ProGuard rules, no accessibility labels,
+no clipboard history, no auto-switch-back keyboard.
 
 ---
 
 ## Milestones
 
-### v0.9.1-beta — Critical Fixes
+### v0.9.1-beta — Critical Fixes *(IN PROGRESS)*
 > Goal: Eliminate crashes, security holes, and data loss risks.
 
-| # | Issue | Severity | File(s) |
-|---|-------|----------|---------|
-| 1 | **Encrypt API keys** — Move from plaintext SharedPreferences to EncryptedSharedPreferences | CRITICAL | MainScreen.kt, VoiceKeyboardInputMethodService.kt |
-| 2 | **Gemini key in URL** — Pass via header (`x-goog-api-key`) instead of query parameter (leaks in logs/analytics) | CRITICAL | GeminiClient.kt |
-| 3 | **ProGuard rules** — Add keep rules for JNI classes (`WhisperLib`, `WhisperCpuConfig`), Compose, and API model classes. Current rules are empty; release builds will strip JNI and crash | CRITICAL | proguard-rules.pro |
-| 4 | **Replace `runBlocking` in `onDestroy`** — Causes ANR if whisper context is slow to free. Use `scope.launch` + `withTimeout` | CRITICAL | VoiceKeyboardInputMethodService.kt |
-| 5 | **Cancel coroutine scope on destroy** — `scope` Job is never cancelled, leaking coroutines after service stops | IMPORTANT | VoiceKeyboardInputMethodService.kt |
-| 6 | **Runtime permission check before recording** — IME service must verify `RECORD_AUDIO` is still granted before calling `AudioRecord.startRecording()`. Permission can be revoked at any time | CRITICAL | VoiceKeyboardInputMethodService.kt |
-| 7 | **Unbounded recording** — Add a max duration timeout (e.g. 5 minutes) to prevent accidental battery drain if user forgets to stop | IMPORTANT | Recorder.kt |
-| 8 | **Network connectivity check** — Verify network before cloud STT/rewrite calls. Currently fails silently with generic error | IMPORTANT | WhisperCloudClient.kt, GeminiClient.kt, OpenAIClient.kt |
-| 9 | **Compose state from IO thread** — Mutable state properties written from `Dispatchers.IO` in the service. Move writes to Main dispatcher | IMPORTANT | VoiceKeyboardInputMethodService.kt |
-| 10 | **Fix `Recorder.kt` finalizer** — `WhisperContext.release()` called in finalizer can deadlock. Release explicitly in service lifecycle | IMPORTANT | Recorder.kt, LibWhisper.kt |
+| # | Issue | Status | File(s) |
+|---|-------|--------|---------|
+| 1 | **Encrypt API keys** — Move from plaintext SharedPreferences to EncryptedSharedPreferences | TODO | MainScreen.kt, VoiceKeyboardInputMethodService.kt |
+| 2 | **Gemini key in URL** — Pass via header (`x-goog-api-key`) instead of query parameter (leaks in logs/analytics) | TODO | GeminiClient.kt |
+| 3 | **ProGuard rules** — Add keep rules for JNI classes (`WhisperLib`, `WhisperCpuConfig`), Compose, and API model classes | TODO | proguard-rules.pro |
+| 4 | ~~Replace `runBlocking` in `onDestroy`~~ — Non-blocking destroy with fire-and-forget release | DONE | VoiceKeyboardInputMethodService.kt |
+| 5 | ~~Cancel coroutine scope on destroy~~ — `job.cancel()` in `onDestroy` | DONE | VoiceKeyboardInputMethodService.kt |
+| 6 | **Runtime permission check before recording** — Verify `RECORD_AUDIO` is still granted before `AudioRecord.startRecording()` | TODO | VoiceKeyboardInputMethodService.kt |
+| 7 | **Unbounded recording** — Add max duration timeout (e.g. 5 minutes) to prevent battery drain | TODO | Recorder.kt |
+| 8 | **Network connectivity check** — Verify network before cloud STT/rewrite calls | TODO | WhisperCloudClient.kt, GeminiClient.kt, OpenAIClient.kt |
+| 9 | ~~Compose state from IO thread~~ — Moved scope to `Dispatchers.Main` | DONE | VoiceKeyboardInputMethodService.kt |
+| 10 | **Fix `Recorder.kt` finalizer** — `WhisperContext.release()` called in finalizer can deadlock | TODO | Recorder.kt, LibWhisper.kt |
+| 11 | ~~VIBRATE permission~~ — Added to manifest + crash-safe `haptic()` | DONE | AndroidManifest.xml, VoiceKeyboardInputMethodService.kt |
+| 12 | ~~ViewModelStoreOwner for Compose IME~~ — Added missing interface + complete view tree setup | DONE | VoiceKeyboardInputMethodService.kt |
+| 13 | ~~Enter key logic~~ — Newline in multi-line fields, IME action in single-line | DONE | VoiceKeyboardInputMethodService.kt |
+| 14 | ~~Settings redesign~~ — Dynamic sections, collapsible debug, logical grouping | DONE | MainScreen.kt |
+| 15 | ~~Versioned APK + GitHub Releases~~ — Auto-named APKs, direct download | DONE | build.gradle, android_build.yml |
+| 16 | ~~Log deduplication~~ — Suppress repeated consecutive messages | DONE | AppLog.kt |
 
 ---
 
@@ -53,11 +64,12 @@ no tests, plaintext API key storage, empty ProGuard rules, no accessibility labe
 | 1 | **Text keyboard fallback** — Full QWERTY layout users can switch to for manual typing | HIGH | Required for Play Store viability. Users need a way to type when they can't speak |
 | 2 | **Punctuation & numbers row** — Quick access to . , ! ? 0-9 without switching keyboards | HIGH | Can be a top row or swipe-up overlay |
 | 3 | **Voice Activity Detection (VAD)** — Auto-start/stop recording when user speaks/pauses | HIGH | Silero VAD is lightweight (~2MB). Eliminates manual start/stop |
-| 4 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
-| 5 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
-| 6 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
-| 7 | **Custom rewrite prompts** — Let users write their own Magic Rewrite style | LOW | TextField in settings, stored in SharedPreferences |
-| 8 | **Clipboard history** — Show recent clipboard items for quick paste | LOW | Nice-to-have for power users |
+| 4 | **Last-used keyboard auto-switch** — Track which keyboard user switched FROM and auto-switch back to it. Uses ContentObserver on `Settings.Secure.DEFAULT_INPUT_METHOD` to record previous IME. Falls back to preferred keyboard setting if no history | HIGH | Better UX than cycling through all keyboards |
+| 5 | **Clipboard history** — Build our own clipboard history using `ClipboardManager.addPrimaryClipChangedListener()`. Captures copies from any app. Button on keyboard opens recent clips for quick paste. Stored locally, auto-prune old entries | HIGH | System clipboard listener is app-agnostic — works regardless of which keyboard copied the text. Cannot sync with Samsung/Gboard proprietary history but captures the same content independently |
+| 6 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
+| 7 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
+| 8 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
+| 9 | **Custom rewrite prompts** — Let users write their own Magic Rewrite style | LOW | TextField in settings, stored in SharedPreferences |
 
 ---
 
@@ -66,7 +78,7 @@ no tests, plaintext API key storage, empty ProGuard rules, no accessibility labe
 
 | # | Item | Category | Notes |
 |---|------|----------|-------|
-| 1 | **Version from BuildConfig** — Remove hardcoded version strings in MainScreen.kt. Use `BuildConfig.VERSION_NAME` | Polish | Currently hardcoded in header (line ~187) and footer (line ~599) |
+| 1 | ~~Version from BuildConfig~~ — Use `BuildConfig.VERSION_NAME` everywhere | DONE | Completed in v0.9.1-beta |
 | 2 | **Accessibility labels** — Add `contentDescription` to all icons and interactive elements | Accessibility | Currently most icons have hardcoded English strings, some are missing entirely |
 | 3 | **TalkBack support** — Verify full keyboard navigation works with screen reader | Accessibility | Required for Play Store accessibility guidelines |
 | 4 | **Connection timeout tuning** — Reduce cloud API timeouts when on slow networks. Add user-visible retry | Performance | Current: 15s connect, 30s read |
@@ -150,6 +162,8 @@ Decisions made during development that should be preserved.
 | Compose for keyboard UI | Matches app settings UI. Simpler state management. Trade-off: slightly higher memory than XML views | 2026-01 |
 | Single coroutine scope for WhisperContext | Whisper is not thread-safe. SingleThreadDispatcher ensures sequential access | 2026-01 |
 | Cloud STT as fallback, not primary | On-device privacy is the product differentiator. Cloud is opt-in for users who want speed/accuracy | 2026-01 |
+| Own clipboard history over Samsung sync | Samsung/Gboard clipboard APIs are proprietary. System ClipboardManager listener captures same content app-agnostically | 2026-02 |
+| ContentObserver for last-used keyboard | No Android API for "previous IME". Track changes to DEFAULT_INPUT_METHOD setting and save last non-WhisperClick value | 2026-02 |
 
 ---
 
