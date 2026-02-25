@@ -1,8 +1,6 @@
 package com.nefeshcore.whisperclick
 
 import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
 import android.view.KeyEvent
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -39,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +44,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
@@ -238,43 +236,37 @@ private fun RepeatKeyButton(
     shape: Shape,
     contentPadding: PaddingValues,
     tonal: Boolean = false,
+    initialDelayMs: Long = 400,
     repeatDelayMs: Long = 50,
     content: @Composable () -> Unit
 ) {
-    var mHandler: Handler? = null
-    val mAction: Runnable = object : Runnable {
-        override fun run() {
-            try {
-                onClick()
-            } catch (_: Exception) {}
-            mHandler?.postDelayed(this, repeatDelayMs)
-        }
-    }
-
+    val currentOnClick by rememberUpdatedState(onClick)
     val interactionSource = remember { MutableInteractionSource() }
+    var pressing by remember { mutableStateOf(false) }
+
+    // Track press/release state
     LaunchedEffect(interactionSource) {
-        interactionSource.interactions.collectLatest { interaction ->
+        interactionSource.interactions.collect { interaction ->
             when (interaction) {
-                is PressInteraction.Press -> {
-                    if (mHandler != null) return@collectLatest
-                    mHandler = Handler(Looper.getMainLooper())
-                    mHandler?.post(mAction)
-                }
-
-                is PressInteraction.Release -> {
-                    val h = mHandler ?: return@collectLatest
-                    h.removeCallbacks(mAction)
-                    mHandler = null
-                }
-
-                is PressInteraction.Cancel -> {
-                    val h = mHandler ?: return@collectLatest
-                    h.removeCallbacks(mAction)
-                    mHandler = null
-                }
+                is PressInteraction.Press -> pressing = true
+                is PressInteraction.Release -> pressing = false
+                is PressInteraction.Cancel -> pressing = false
             }
         }
     }
+
+    // Fire immediately on press, then repeat after initial delay
+    LaunchedEffect(pressing) {
+        if (pressing) {
+            currentOnClick()
+            delay(initialDelayMs)
+            while (true) {
+                currentOnClick()
+                delay(repeatDelayMs)
+            }
+        }
+    }
+
     if (tonal) {
         FilledTonalButton(
             onClick = {},
@@ -304,6 +296,8 @@ private fun LongPressButton(
     longPressMs: Long = 500,
     content: @Composable () -> Unit
 ) {
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
     val interactionSource = remember { MutableInteractionSource() }
     var longPressTriggered by remember { mutableStateOf(false) }
 
@@ -314,16 +308,16 @@ private fun LongPressButton(
                     longPressTriggered = false
                     delay(longPressMs)
                     longPressTriggered = true
-                    onLongPress()
+                    currentOnLongPress()
                 }
-
                 is PressInteraction.Release -> {}
+                is PressInteraction.Cancel -> {}
             }
         }
     }
 
     OutlinedButton(
-        onClick = { if (!longPressTriggered) onTap() },
+        onClick = { if (!longPressTriggered) currentOnTap() },
         interactionSource = interactionSource,
         modifier = modifier,
         shape = shape,
@@ -348,13 +342,23 @@ private fun RecordButton(
 ) {
     var firstRender by remember { mutableStateOf(true) }
     var seconds by remember { mutableIntStateOf(0) }
-    var timerHandler: Handler? by remember { mutableStateOf(null) }
-    var start by remember { mutableLongStateOf(0) }
+    var recordingStartTime by remember { mutableLongStateOf(0L) }
 
-    val runnable: Runnable = object : Runnable {
-        override fun run() {
-            seconds = ((System.currentTimeMillis() - start) / 1000).toInt()
-            timerHandler?.postDelayed(this, 1_000)
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnCancel by rememberUpdatedState(onCancel)
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
+    val currentIsRecording by rememberUpdatedState(isRecording)
+    val currentIsTranscribing by rememberUpdatedState(isTranscribing)
+
+    // Timer: count seconds while recording
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingStartTime = System.currentTimeMillis()
+            seconds = 0
+            while (true) {
+                delay(1_000)
+                seconds = ((System.currentTimeMillis() - recordingStartTime) / 1000).toInt()
+            }
         }
     }
 
@@ -367,13 +371,14 @@ private fun RecordButton(
             when (interaction) {
                 is PressInteraction.Press -> {
                     longPressTriggered = false
-                    if (!isRecording && !isTranscribing) {
+                    if (!currentIsRecording && !currentIsTranscribing) {
                         delay(500)
                         longPressTriggered = true
-                        onLongPress()
+                        currentOnLongPress()
                     }
                 }
                 is PressInteraction.Release -> {}
+                is PressInteraction.Cancel -> {}
             }
         }
     }
@@ -381,20 +386,11 @@ private fun RecordButton(
     Button(
         onClick = {
             if (longPressTriggered) return@Button
-            if (isTranscribing) {
-                onCancel()
+            if (currentIsTranscribing) {
+                currentOnCancel()
                 return@Button
             }
-            if (!isRecording) {
-                start = System.currentTimeMillis()
-                seconds = 0
-                timerHandler = Handler(Looper.getMainLooper())
-                timerHandler!!.postDelayed(runnable, 1_000)
-            } else {
-                timerHandler?.removeCallbacks(runnable)
-                timerHandler = null
-            }
-            onClick()
+            currentOnClick()
         },
         enabled = enabled || isTranscribing,
         interactionSource = interactionSource,

@@ -33,7 +33,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -42,7 +41,7 @@ private const val LOG_TAG = "VoiceKeyboardInputMethodService"
 class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     SavedStateRegistryOwner {
     private val job = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.IO + job)
+    private val scope = CoroutineScope(Dispatchers.Main + job)
 
     // handle audio manager
     private val audioManager: AudioManager by lazy {
@@ -99,7 +98,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
     override fun onCreateInputView(): View {
         val view = VoiceKeyboardView(this)
-        window!!.window!!.decorView.let { decorView ->
+        window?.window?.decorView?.let { decorView ->
             decorView.setViewTreeLifecycleOwner(this)
             decorView.setViewTreeSavedStateRegistryOwner(this)
         }
@@ -134,10 +133,13 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
     override fun onDestroy() {
         super.onDestroy()
-        runBlocking {
-            whisperContext?.release()
-            whisperContext = null
+        // Release whisper context on its own executor without blocking main thread
+        val ctx = whisperContext
+        whisperContext = null
+        if (ctx != null) {
+            CoroutineScope(Dispatchers.Default).launch { ctx.release() }
         }
+        job.cancel()
         handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
 
