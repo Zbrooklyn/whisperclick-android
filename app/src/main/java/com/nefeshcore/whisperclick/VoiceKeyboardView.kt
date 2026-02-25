@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.KeyboardVoice
 import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.SelectAll
@@ -96,7 +97,9 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     RecordButton(
                         enabled = service.canTranscribe,
                         isRecording = service.isRecording,
+                        isTranscribing = service.isTranscribing,
                         onClick = service::toggleRecord,
+                        onCancel = service::cancelTranscription,
                         modifier = Modifier
                             .weight(1f, true)
                             .padding(btnPad),
@@ -282,7 +285,9 @@ private fun LongPressButton(
 private fun RecordButton(
     enabled: Boolean,
     isRecording: Boolean,
+    isTranscribing: Boolean,
     onClick: () -> Unit,
+    onCancel: () -> Unit,
     modifier: Modifier,
     shape: Shape
 ) {
@@ -299,6 +304,10 @@ private fun RecordButton(
     }
 
     Button(onClick = {
+        if (isTranscribing) {
+            onCancel()
+            return@Button
+        }
         if (!isRecording) {
             start = System.currentTimeMillis()
             seconds = 0
@@ -309,8 +318,12 @@ private fun RecordButton(
             handler = null
         }
         onClick()
-    }, enabled = enabled, modifier = modifier, shape = shape) {
-        if (!enabled && firstRender) {
+    }, enabled = enabled || isTranscribing, modifier = modifier, shape = shape) {
+        if (isTranscribing) {
+            firstRender = false
+            Icon(Icons.Outlined.Close, "Cancel")
+            Text(" Cancel", fontSize = 16.sp)
+        } else if (!enabled && firstRender) {
             Icon(
                 Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording)
             )

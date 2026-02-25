@@ -170,6 +170,10 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         private set
     var isRecording by mutableStateOf(false)
         private set
+    var isTranscribing by mutableStateOf(false)
+        private set
+    @Volatile
+    private var transcriptionCancelled = false
     private var modelsPath: File? = null
     private var samplesPath: File? = null
     private var sharedPref: SharedPreferences? = null
@@ -250,6 +254,11 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         return text.ifEmpty { null }
     }
 
+    fun cancelTranscription() {
+        transcriptionCancelled = true
+        AppLog.log("Keyboard", "Transcription cancel requested")
+    }
+
     fun cancelRecord() = scope.launch {
         try {
             if (isRecording) {
@@ -279,9 +288,15 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
                 if (samples.isNotEmpty() && canTranscribe) {
                     canTranscribe = false
+                    isTranscribing = true
+                    transcriptionCancelled = false
                     currentInputConnection.setComposingText("Transcribing...", 1)
                     val text = transcribe(samples)
-                    if (text != null) {
+                    isTranscribing = false
+                    if (transcriptionCancelled) {
+                        AppLog.log("Keyboard", "Transcription cancelled")
+                        currentInputConnection.setComposingText("", 1)
+                    } else if (text != null) {
                         currentInputConnection.setComposingText(text + (trailing ?: ""), 1)
                     }
                     canTranscribe = true
