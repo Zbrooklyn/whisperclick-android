@@ -155,40 +155,113 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     // --- Magic Rewrite Feature ---
+    var rewriteOriginalText by mutableStateOf("")
+        private set
+    var rewriteVariants by mutableStateOf<com.nefeshcore.whisperclick.api.RewriteVariants?>(null)
+        private set
+    var isRewriting by mutableStateOf(false)
+        private set
+    var rewriteError by mutableStateOf<String?>(null)
+        private set
+
+    private var preRewriteText: String? = null // for undo
+
+    fun getRewriteClient(): Pair<com.nefeshcore.whisperclick.api.RewriteProvider, String> {
+        val provider = sharedPref?.getString("ai_provider", "gemini") ?: "gemini"
+        val apiKeyPref = if (provider == "openai") "openai_api_key" else "gemini_api_key"
+        val apiKey = sharedPref?.getString(apiKeyPref, "") ?: ""
+        val client: com.nefeshcore.whisperclick.api.RewriteProvider = if (provider == "openai") {
+            com.nefeshcore.whisperclick.api.OpenAIClient
+        } else {
+            com.nefeshcore.whisperclick.api.GeminiClient
+        }
+        return client to apiKey
+    }
+
+    fun requestRewriteAll() {
+        val ic = currentInputConnection ?: run {
+            rewriteError = "No text field active"
+            return
+        }
+        val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
+        if (textBefore.isBlank()) {
+            rewriteError = "No text to rewrite"
+            return
+        }
+
+        val (client, apiKey) = getRewriteClient()
+        if (apiKey.isEmpty()) {
+            rewriteError = "Set ${client.name} API key in Settings"
+            return
+        }
+
+        rewriteOriginalText = textBefore
+        rewriteVariants = null
+        rewriteError = null
+        isRewriting = true
+
+        AppLog.log("Rewrite", "Requesting all variants (${client.name})...")
+        scope.launch {
+            val start = System.currentTimeMillis()
+            val variants = client.rewriteAll(apiKey, textBefore)
+            val elapsed = System.currentTimeMillis() - start
+            AppLog.log("Rewrite", "All variants received (${elapsed}ms)")
+            rewriteVariants = variants
+            isRewriting = false
+        }
+    }
+
+    fun applyRewrite(text: String) {
+        val ic = currentInputConnection ?: return
+        val original = rewriteOriginalText
+        if (original.isNotEmpty()) {
+            preRewriteText = original
+            ic.deleteSurroundingText(original.length, 0)
+            ic.commitText(text, 1)
+            AppLog.log("Rewrite", "Applied: ${text.take(80)}${if (text.length > 80) "..." else ""}")
+        }
+        clearRewriteState()
+    }
+
+    fun undoRewrite() {
+        val ic = currentInputConnection ?: return
+        val original = preRewriteText ?: return
+        val currentText = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
+        if (currentText.isNotEmpty()) {
+            ic.deleteSurroundingText(currentText.length, 0)
+            ic.commitText(original, 1)
+            AppLog.log("Rewrite", "Undone")
+        }
+        preRewriteText = null
+    }
+
+    fun clearRewriteState() {
+        rewriteOriginalText = ""
+        rewriteVariants = null
+        rewriteError = null
+        isRewriting = false
+    }
+
+    // Legacy single-style rewrite (kept for compatibility)
     fun performRewrite(style: String) {
         AppLog.log("Rewrite", "Triggered: style=$style")
-
         val ic = currentInputConnection ?: run {
             AppLog.log("Rewrite", "ERROR: No InputConnection")
             return
         }
         val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
-
         if (textBefore.isEmpty()) {
             AppLog.log("Rewrite", "No text to rewrite")
             return
         }
-        AppLog.log("Rewrite", "Input: ${textBefore.take(80)}${if (textBefore.length > 80) "..." else ""}")
+
+        val (client, apiKey) = getRewriteClient()
+        if (apiKey.isEmpty()) {
+            AppLog.log("Rewrite", "ERROR: ${client.name} API Key not set")
+            return
+        }
 
         scope.launch {
-            val provider = sharedPref?.getString("ai_provider", "gemini") ?: "gemini"
-            val apiKeyPref = if (provider == "openai") "openai_api_key" else "gemini_api_key"
-            val apiKey = sharedPref?.getString(apiKeyPref, "") ?: ""
-            val client: com.nefeshcore.whisperclick.api.RewriteProvider = if (provider == "openai") {
-                com.nefeshcore.whisperclick.api.OpenAIClient
-            } else {
-                com.nefeshcore.whisperclick.api.GeminiClient
-            }
-
-            if (apiKey.isEmpty()) {
-                val providerName = client.name
-                AppLog.log("Rewrite", "ERROR: $providerName API Key not set")
-                withContext(Dispatchers.Main) {
-                    ic.commitText("[Error: Set $providerName API Key in Settings]", 1)
-                }
-                return@launch
-            }
-
             AppLog.log("Rewrite", "Calling ${client.name} API...")
             val start = System.currentTimeMillis()
             val rewritten = client.rewriteText(apiKey, textBefore, style)
