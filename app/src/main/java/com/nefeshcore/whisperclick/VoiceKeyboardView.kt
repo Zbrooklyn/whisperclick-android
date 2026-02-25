@@ -244,8 +244,10 @@ private fun RepeatKeyButton(
     var mHandler: Handler? = null
     val mAction: Runnable = object : Runnable {
         override fun run() {
-            onClick()
-            mHandler!!.postDelayed(this, repeatDelayMs)
+            try {
+                onClick()
+            } catch (_: Exception) {}
+            mHandler?.postDelayed(this, repeatDelayMs)
         }
     }
 
@@ -256,12 +258,18 @@ private fun RepeatKeyButton(
                 is PressInteraction.Press -> {
                     if (mHandler != null) return@collectLatest
                     mHandler = Handler(Looper.getMainLooper())
-                    mHandler!!.post(mAction)
+                    mHandler?.post(mAction)
                 }
 
                 is PressInteraction.Release -> {
-                    if (mHandler == null) return@collectLatest
-                    mHandler!!.removeCallbacks(mAction)
+                    val h = mHandler ?: return@collectLatest
+                    h.removeCallbacks(mAction)
+                    mHandler = null
+                }
+
+                is PressInteraction.Cancel -> {
+                    val h = mHandler ?: return@collectLatest
+                    h.removeCallbacks(mAction)
                     mHandler = null
                 }
             }

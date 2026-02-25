@@ -315,7 +315,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                     audioManager.abandonAudioFocusRequest(focusRequest)
                 }
                 recorder.stopRecording()
-                currentInputConnection.finishComposingText()
+                currentInputConnection?.finishComposingText()
                 isRecording = false
             }
         } catch (e: Exception) {
@@ -327,6 +327,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
     fun toggleRecord() = scope.launch {
         try {
+            val ic = currentInputConnection
             if (isRecording) {
                 AppLog.log("Keyboard", "Recording stopped")
                 if (checkBoolPref(R.string.pause_media) == true) {
@@ -339,18 +340,18 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                     canTranscribe = false
                     isTranscribing = true
                     transcriptionCancelled = false
-                    currentInputConnection.setComposingText("Transcribing...", 1)
+                    ic?.setComposingText("Transcribing...", 1)
                     val text = if (useCloudStt) transcribeCloud(samples) else transcribe(samples)
                     isTranscribing = false
                     if (transcriptionCancelled) {
                         AppLog.log("Keyboard", "Transcription cancelled")
-                        currentInputConnection.setComposingText("", 1)
+                        ic?.setComposingText("", 1)
                     } else if (text != null) {
-                        currentInputConnection.setComposingText(text + (trailing ?: ""), 1)
+                        ic?.setComposingText(text + (trailing ?: ""), 1)
                     }
                     canTranscribe = true
                 }
-                currentInputConnection.finishComposingText()
+                ic?.finishComposingText()
             } else {
                 if (checkBoolPref(R.string.pause_media) == true) {
                     val result = audioManager.requestAudioFocus(focusRequest)
@@ -367,12 +368,12 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 AppLog.log("Keyboard", "Recording started")
                 isRecording = true
                 // if not preceded by empty space, commit empty space
-                val charBefore = currentInputConnection.getTextBeforeCursor(1, 0)
+                val charBefore = ic?.getTextBeforeCursor(1, 0)
                 if (charBefore?.isNotEmpty()?.and(charBefore != " ") == true) {
-                    currentInputConnection.commitText(" ", 1)
+                    ic?.commitText(" ", 1)
                 }
                 // if not followed by empty space, add trailing space
-                val charAfter = currentInputConnection.getTextAfterCursor(1, 0)
+                val charAfter = ic?.getTextAfterCursor(1, 0)
                 if (charAfter != " ") {
                     trailing = " "
                 }
@@ -398,10 +399,11 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     // for keys — supports optional meta keys (e.g. CTRL for undo)
     fun sendKeyPress(key: Int, meta: Int = 0) {
         haptic()
-        currentInputConnection.sendKeyEvent(
+        val ic = currentInputConnection ?: return
+        ic.sendKeyEvent(
             KeyEvent(0, 0, KeyEvent.ACTION_DOWN, key, 0, meta)
         )
-        currentInputConnection.sendKeyEvent(
+        ic.sendKeyEvent(
             KeyEvent(0, 0, KeyEvent.ACTION_UP, key, 0, meta)
         )
     }
