@@ -7,6 +7,9 @@ import android.content.Intent
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,14 +26,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Error
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Memory
@@ -86,6 +91,7 @@ import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.nefeshcore.whisperclick.BuildConfig
 import com.nefeshcore.whisperclick.R
 import com.nefeshcore.whisperclick.api.ApiKeyValidator
 import com.nefeshcore.whisperclick.model.ModelManager
@@ -104,7 +110,7 @@ fun MainScreen(viewModel: MainScreenViewModel) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 private fun MainScreen(
     canTranscribe: Boolean,
@@ -122,35 +128,22 @@ private fun MainScreen(
     val casualMode = stringResource(R.string.casual_mode)
     val pauseMediaStr = stringResource(R.string.pause_media)
     var nThreads by remember {
-        mutableFloatStateOf(
-            sharedPref.getInt(threadsStr, maxThreads).toFloat()
-        )
+        mutableFloatStateOf(sharedPref.getInt(threadsStr, maxThreads).toFloat())
     }
     var lowercase by remember {
-        mutableStateOf(
-            sharedPref.getBoolean(casualMode, false)
-        )
+        mutableStateOf(sharedPref.getBoolean(casualMode, false))
     }
     var pauseMedia by remember {
-        mutableStateOf(
-            sharedPref.getBoolean(pauseMediaStr, false)
-        )
+        mutableStateOf(sharedPref.getBoolean(pauseMediaStr, false))
     }
-
     var aiProvider by remember {
-        mutableStateOf(
-            sharedPref.getString("ai_provider", "gemini") ?: "gemini"
-        )
+        mutableStateOf(sharedPref.getString("ai_provider", "gemini") ?: "gemini")
     }
     var geminiApiKey by remember {
-        mutableStateOf(
-            sharedPref.getString("gemini_api_key", "") ?: ""
-        )
+        mutableStateOf(sharedPref.getString("gemini_api_key", "") ?: "")
     }
     var openaiApiKey by remember {
-        mutableStateOf(
-            sharedPref.getString("openai_api_key", "") ?: ""
-        )
+        mutableStateOf(sharedPref.getString("openai_api_key", "") ?: "")
     }
     var sttMode by remember {
         mutableStateOf(sharedPref.getString("stt_mode", "local") ?: "local")
@@ -164,6 +157,9 @@ private fun MainScreen(
     val bundledModels = remember { ModelManager.getBundledModels(context) }
     var activeModel by remember { mutableStateOf(ModelManager.getActiveModelName(context)) }
     var showModelDialog by remember { mutableStateOf(false) }
+    var debugExpanded by remember { mutableStateOf(false) }
+
+    val versionName = BuildConfig.VERSION_NAME
 
     Scaffold(
         topBar = {
@@ -186,7 +182,7 @@ private fun MainScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "v0.9.0-beta",
+                                "v$versionName",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -212,7 +208,9 @@ private fun MainScreen(
                 val activeLabel = if (activeModel.isEmpty()) "tiny.en" else activeModel
                 val modeLabel = if (sttMode == "cloud") "Cloud" else "Local"
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
@@ -236,24 +234,23 @@ private fun MainScreen(
                 }
             }
 
-            // ── Setup ──
+            // ── Setup (auto-collapses when complete) ──
             item {
-                SectionCard(title = "Setup") {
-                    InputMethodButton()
-                    PermissionButton()
-                    KeyboardPickerItem(sharedPref)
-                }
+                SetupSection(sharedPref)
             }
 
-            // ── Speech-to-Text ──
+            // ── Speech-to-Text (dynamic based on mode) ──
             item {
                 SectionCard(title = "Speech-to-Text") {
+                    // Mode toggle
                     ListItem(
                         headlineContent = { Text("STT Mode") },
                         leadingContent = { Icon(Icons.Outlined.Cloud, null) },
                         supportingContent = {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 FilterChip(
@@ -274,188 +271,132 @@ private fun MainScreen(
                                             putString("stt_mode", "cloud"); apply()
                                         }
                                     },
-                                    label = { Text("Cloud (OpenAI)") }
+                                    label = { Text("Cloud (OpenAI Whisper)") }
                                 )
                             }
                         }
                     )
-                    // Active Model
-                    val allModels =
-                        bundledModels + downloadedModels.filter { it !in bundledModels }
-                    val activeLabel =
-                        if (activeModel.isEmpty()) "Default (bundled)" else activeModel
-                    ListItem(
-                        headlineContent = { Text("Active Model") },
-                        leadingContent = { Icon(Icons.Outlined.Memory, null) },
-                        supportingContent = { Text(activeLabel) },
-                        trailingContent = {
-                            Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
-                        },
-                        modifier = Modifier.clickable { showModelDialog = true }
-                    )
-                    if (showModelDialog) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showModelDialog = false },
-                            title = { Text("Select Model") },
-                            text = {
-                                androidx.compose.foundation.lazy.LazyColumn {
-                                    item {
-                                        ListItem(
-                                            headlineContent = { Text("Default (bundled)") },
-                                            modifier = Modifier.clickable {
-                                                activeModel = ""
-                                                ModelManager.setActiveModel(context, "")
-                                                showModelDialog = false
-                                            }
-                                        )
-                                    }
-                                    items(allModels.size) { i ->
-                                        val name = allModels[i]
-                                        ListItem(
-                                            headlineContent = { Text(name) },
-                                            supportingContent = {
-                                                Text(if (name in bundledModels) "Bundled" else "Downloaded")
-                                            },
-                                            modifier = Modifier.clickable {
-                                                activeModel = name
-                                                ModelManager.setActiveModel(context, name)
-                                                showModelDialog = false
-                                            }
-                                        )
-                                    }
-                                }
+
+                    // Dynamic content based on mode
+                    if (sttMode == "local") {
+                        // Active Model (compact)
+                        val activeLabel =
+                            if (activeModel.isEmpty()) "Default (bundled)" else activeModel
+                        ListItem(
+                            headlineContent = { Text("Active Model") },
+                            leadingContent = { Icon(Icons.Outlined.Memory, null) },
+                            supportingContent = { Text(activeLabel) },
+                            trailingContent = {
+                                Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
                             },
-                            confirmButton = {}
+                            modifier = Modifier.clickable { showModelDialog = true }
                         )
-                    }
-                    // Download Models
-                    ListItem(
-                        headlineContent = { Text("Download Models") },
-                        leadingContent = { Icon(Icons.Outlined.Download, null) },
-                        supportingContent = {
-                            Column {
-                                if (downloadProgress.isDownloading) {
-                                    val model = downloadProgress.model
-                                    Text("Downloading ${model?.name ?: ""}...")
-                                    if (downloadProgress.totalBytes > 0) {
-                                        LinearProgressIndicator(
-                                            progress = downloadProgress.bytesDownloaded.toFloat() / downloadProgress.totalBytes.toFloat(),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 4.dp)
-                                        )
-                                        Text(
-                                            "${downloadProgress.bytesDownloaded / 1024 / 1024}MB / ${downloadProgress.totalBytes / 1024 / 1024}MB",
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    TextButton(onClick = { ModelManager.cancelDownload() }) {
-                                        Text("Cancel")
-                                    }
-                                } else {
-                                    ModelManager.availableModels.forEach { model ->
-                                        val isDownloaded =
-                                            model.fileName in downloadedModels || model.fileName in bundledModels
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 2.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(model.name, fontSize = 14.sp)
-                                                Text(
-                                                    "${model.sizeMb}MB \u00b7 ${model.tier}",
-                                                    fontSize = 12.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            if (isDownloaded) {
-                                                Text(
-                                                    "\u2713",
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            } else {
-                                                TextButton(onClick = {
-                                                    coroutineScope.launch {
-                                                        val ok = ModelManager.downloadModel(
-                                                            context,
-                                                            model
-                                                        )
-                                                        if (ok) downloadedModels =
-                                                            ModelManager.getDownloadedModels(context)
+
+                        // Download Models
+                        ListItem(
+                            headlineContent = { Text("Manage Models") },
+                            leadingContent = { Icon(Icons.Outlined.Download, null) },
+                            supportingContent = {
+                                Column {
+                                    if (downloadProgress.isDownloading) {
+                                        val model = downloadProgress.model
+                                        Text("Downloading ${model?.name ?: ""}...")
+                                        if (downloadProgress.totalBytes > 0) {
+                                            LinearProgressIndicator(
+                                                progress = downloadProgress.bytesDownloaded.toFloat() / downloadProgress.totalBytes.toFloat(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 4.dp)
+                                            )
+                                            Text(
+                                                "${downloadProgress.bytesDownloaded / 1024 / 1024}MB / ${downloadProgress.totalBytes / 1024 / 1024}MB",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        TextButton(onClick = { ModelManager.cancelDownload() }) {
+                                            Text("Cancel")
+                                        }
+                                    } else {
+                                        ModelManager.availableModels.forEach { model ->
+                                            val isDownloaded =
+                                                model.fileName in downloadedModels || model.fileName in bundledModels
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 2.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(model.name, fontSize = 14.sp)
+                                                    Text(
+                                                        "${model.sizeMb}MB \u00b7 ${model.tier}",
+                                                        fontSize = 12.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                if (isDownloaded) {
+                                                    Text(
+                                                        "\u2713",
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                } else {
+                                                    TextButton(onClick = {
+                                                        coroutineScope.launch {
+                                                            val ok = ModelManager.downloadModel(
+                                                                context, model
+                                                            )
+                                                            if (ok) downloadedModels =
+                                                                ModelManager.getDownloadedModels(
+                                                                    context
+                                                                )
+                                                        }
+                                                    }) {
+                                                        Text("Get")
                                                     }
-                                                }) {
-                                                    Text("Get")
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                    )
-                }
-            }
+                        )
 
-            // ── Advanced ──
-            item {
-                SectionCard(title = "Advanced") {
-                    // AI Provider Picker
-                    ListItem(
-                        headlineContent = { Text("AI Provider") },
-                        leadingContent = { Icon(Icons.Outlined.Star, null) },
-                        supportingContent = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(
-                                    selected = aiProvider == "gemini",
-                                    onClick = {
-                                        aiProvider = "gemini"
-                                        with(sharedPref.edit()) {
-                                            putString("ai_provider", "gemini")
-                                            apply()
-                                        }
-                                    },
-                                    label = { Text("Gemini") }
-                                )
-                                FilterChip(
-                                    selected = aiProvider == "openai",
-                                    onClick = {
-                                        aiProvider = "openai"
-                                        with(sharedPref.edit()) {
-                                            putString("ai_provider", "openai")
-                                            apply()
-                                        }
-                                    },
-                                    label = { Text("OpenAI") }
-                                )
-                            }
-                        }
-                    )
-                    // API Key
-                    if (aiProvider == "gemini") {
-                        ApiKeyField(
-                            label = "Gemini API Key",
-                            value = geminiApiKey,
-                            placeholder = "AIza...",
-                            onValueChange = {
-                                geminiApiKey = it
-                                with(sharedPref.edit()) {
-                                    putString("gemini_api_key", it)
-                                    apply()
+                        // Threads slider (only relevant for local)
+                        ListItem(
+                            headlineContent = { Text(stringResource(R.string.num_threads_option)) },
+                            leadingContent = { Icon(Icons.Outlined.Memory, null) },
+                            supportingContent = {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Slider(
+                                        value = nThreads,
+                                        onValueChange = { nThreads = it },
+                                        onValueChangeFinished = {
+                                            with(sharedPref.edit()) {
+                                                putInt(threadsStr, nThreads.toInt())
+                                                apply()
+                                            }
+                                        },
+                                        steps = maxThreads - 2,
+                                        valueRange = 1f..maxThreads.toFloat(),
+                                        modifier = Modifier.weight(1f, true)
+                                    )
+                                    Text(
+                                        nThreads.toInt().toString(),
+                                        modifier = Modifier.padding(4.dp),
+                                        fontSize = 16.sp,
+                                    )
                                 }
                             },
-                            onVerify = { ApiKeyValidator.validateGemini(it) }
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    }
-                    if (aiProvider == "openai") {
+                    } else {
+                        // Cloud mode — show OpenAI API key
                         ApiKeyField(
                             label = "OpenAI API Key",
                             value = openaiApiKey,
@@ -470,56 +411,148 @@ private fun MainScreen(
                             onVerify = { ApiKeyValidator.validateOpenAI(it) }
                         )
                     }
-                    // Threads
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.num_threads_option)) },
-                        leadingContent = { Icon(Icons.Outlined.Memory, null) },
-                        supportingContent = {
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Slider(
-                                    value = nThreads,
-                                    onValueChange = { nThreads = it },
-                                    onValueChangeFinished = {
-                                        with(sharedPref.edit()) {
-                                            putInt(threadsStr, nThreads.toInt())
-                                            apply()
+                }
+
+                // Model picker dialog
+                if (showModelDialog) {
+                    val allModels =
+                        bundledModels + downloadedModels.filter { it !in bundledModels }
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showModelDialog = false },
+                        title = { Text("Select Model") },
+                        text = {
+                            androidx.compose.foundation.lazy.LazyColumn {
+                                item {
+                                    ListItem(
+                                        headlineContent = { Text("Default (bundled)") },
+                                        modifier = Modifier.clickable {
+                                            activeModel = ""
+                                            ModelManager.setActiveModel(context, "")
+                                            showModelDialog = false
                                         }
-                                    },
-                                    steps = maxThreads - 2,
-                                    valueRange = 1f..maxThreads.toFloat(),
-                                    modifier = Modifier.weight(1f, true)
-                                )
-                                Text(
-                                    nThreads.toInt().toString(),
-                                    modifier = Modifier.padding(4.dp),
-                                    fontSize = 16.sp,
-                                )
+                                    )
+                                }
+                                items(allModels.size) { i ->
+                                    val name = allModels[i]
+                                    ListItem(
+                                        headlineContent = { Text(name) },
+                                        supportingContent = {
+                                            Text(if (name in bundledModels) "Bundled" else "Downloaded")
+                                        },
+                                        modifier = Modifier.clickable {
+                                            activeModel = name
+                                            ModelManager.setActiveModel(context, name)
+                                            showModelDialog = false
+                                        }
+                                    )
+                                }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        confirmButton = {}
                     )
-                    // Pause Media
+                }
+            }
+
+            // ── Magic Rewrite ──
+            item {
+                SectionCard(title = "Magic Rewrite") {
+                    // Description
                     ListItem(
-                        headlineContent = { Text(stringResource(R.string.pause_media_option)) },
-                        leadingContent = { Icon(Icons.Outlined.Pause, null) },
+                        headlineContent = { Text("AI Text Rewrite") },
+                        leadingContent = { Icon(Icons.Outlined.Star, null) },
                         supportingContent = {
-                            Text(stringResource(R.string.pause_media_description))
-                        },
-                        trailingContent = {
-                            Switch(checked = pauseMedia, onCheckedChange = {
-                                pauseMedia = it
-                                with(sharedPref.edit()) {
-                                    putBoolean(pauseMediaStr, it)
-                                    apply()
-                                }
-                            })
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                            Text("Rewrite selected text using AI. Long-press the mic button to access rewrite styles.")
+                        }
                     )
+                    // Provider picker
+                    ListItem(
+                        headlineContent = { Text("AI Provider") },
+                        supportingContent = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = aiProvider == "gemini",
+                                    onClick = {
+                                        aiProvider = "gemini"
+                                        with(sharedPref.edit()) {
+                                            putString("ai_provider", "gemini"); apply()
+                                        }
+                                    },
+                                    label = { Text("Gemini") }
+                                )
+                                FilterChip(
+                                    selected = aiProvider == "openai",
+                                    onClick = {
+                                        aiProvider = "openai"
+                                        with(sharedPref.edit()) {
+                                            putString("ai_provider", "openai"); apply()
+                                        }
+                                    },
+                                    label = { Text("OpenAI") }
+                                )
+                            }
+                        }
+                    )
+                    // API Key — smart: don't duplicate if OpenAI key already shown in Cloud STT
+                    if (aiProvider == "gemini") {
+                        ApiKeyField(
+                            label = "Gemini API Key",
+                            value = geminiApiKey,
+                            placeholder = "AIza...",
+                            onValueChange = {
+                                geminiApiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("gemini_api_key", it); apply()
+                                }
+                            },
+                            onVerify = { ApiKeyValidator.validateGemini(it) }
+                        )
+                    } else if (aiProvider == "openai" && sttMode == "cloud") {
+                        // OpenAI key already entered in Cloud STT section
+                        ListItem(
+                            headlineContent = { Text("OpenAI API Key") },
+                            leadingContent = {
+                                Icon(
+                                    if (openaiApiKey.isNotEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.Key,
+                                    null,
+                                    tint = if (openaiApiKey.isNotEmpty()) Color(0xFF4CAF50)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    if (openaiApiKey.isNotEmpty()) "Using key from Cloud STT"
+                                    else "Set your OpenAI key in the Cloud STT section above",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        )
+                    } else {
+                        // OpenAI provider + local STT — show key field here
+                        ApiKeyField(
+                            label = "OpenAI API Key",
+                            value = openaiApiKey,
+                            placeholder = "sk-...",
+                            onValueChange = {
+                                openaiApiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("openai_api_key", it); apply()
+                                }
+                            },
+                            onVerify = { ApiKeyValidator.validateOpenAI(it) }
+                        )
+                    }
+                }
+            }
+
+            // ── Preferences (merged: behavior + appearance) ──
+            item {
+                SectionCard(title = "Preferences") {
                     // Casual mode
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.casual_option)) },
@@ -531,19 +564,30 @@ private fun MainScreen(
                             Switch(checked = lowercase, onCheckedChange = {
                                 lowercase = it
                                 with(sharedPref.edit()) {
-                                    putBoolean(casualMode, it)
-                                    apply()
+                                    putBoolean(casualMode, it); apply()
                                 }
                             })
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-            }
-
-            // ── Appearance ──
-            item {
-                SectionCard(title = "Appearance") {
+                    // Pause media
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.pause_media_option)) },
+                        leadingContent = { Icon(Icons.Outlined.Pause, null) },
+                        supportingContent = {
+                            Text(stringResource(R.string.pause_media_description))
+                        },
+                        trailingContent = {
+                            Switch(checked = pauseMedia, onCheckedChange = {
+                                pauseMedia = it
+                                with(sharedPref.edit()) {
+                                    putBoolean(pauseMediaStr, it); apply()
+                                }
+                            })
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Theme
                     ListItem(
                         headlineContent = { Text("Theme") },
                         leadingContent = { Icon(Icons.Outlined.DarkMode, null) },
@@ -576,17 +620,33 @@ private fun MainScreen(
                 }
             }
 
-            // ── Testing ──
+            // ── Debug (collapsed by default) ──
             item {
-                SectionCard(title = "Testing") {
+                CollapsibleSectionCard(
+                    title = "Debug",
+                    expanded = debugExpanded,
+                    onToggle = { debugExpanded = !debugExpanded }
+                ) {
                     BenchmarkButton(enabled = canTranscribe, onClick = onBenchmarkTapped)
                     RecordButton(
                         enabled = canTranscribe,
                         isRecording = isRecording,
                         onClick = onRecordTapped
                     )
-                    AppLogSection()
-                    CrashLogSection()
+                    CollapsibleLogSection(
+                        title = "App Log",
+                        icon = null
+                    ) {
+                        AppLogContent()
+                    }
+                    CollapsibleLogSection(
+                        title = "Crash Logs",
+                        icon = Icons.Outlined.BugReport,
+                        iconTint = MaterialTheme.colorScheme.error,
+                        badge = CrashLogger.getCrashCount().let { if (it > 0) "($it)" else null }
+                    ) {
+                        CrashLogContent()
+                    }
                 }
             }
 
@@ -599,7 +659,7 @@ private fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "WhisperClick v0.9.0-beta",
+                        "WhisperClick v$versionName",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -652,46 +712,137 @@ private fun SectionCard(
     }
 }
 
-// ── Log section ──
+// ── Collapsible Section Card ──
 
 @Composable
-private fun AppLogSection() {
+private fun CollapsibleSectionCard(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = if (expanded) 4.dp else 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp,
+            )
+            Icon(
+                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Column {
+                content()
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+    }
+}
+
+// ── Collapsible Log Sub-section ──
+
+@Composable
+private fun CollapsibleLogSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    badge: String? = null,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, null, tint = iconTint, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                title + (badge?.let { " $it" } ?: ""),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (icon != null) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(),
+        exit = shrinkVertically()
+    ) {
+        content()
+    }
+}
+
+// ── App Log content ──
+
+@Composable
+private fun AppLogContent() {
     val logText by AppLog.log.collectAsState()
     val context = LocalContext.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.End
     ) {
-        Text(
-            "Log",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Row {
-            IconButton(onClick = {
-                val clipboard =
-                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText("WhisperClick Log", logText)
-                )
-                Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
-            }) {
-                Icon(
-                    Icons.Outlined.ContentCopy, "Copy log",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            IconButton(onClick = { AppLog.clear() }) {
-                Icon(
-                    Icons.Outlined.Delete, "Clear log",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+        IconButton(onClick = {
+            val clipboard =
+                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(
+                ClipData.newPlainText("WhisperClick Log", logText)
+            )
+            Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
+        }) {
+            Icon(
+                Icons.Outlined.ContentCopy, "Copy log",
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        IconButton(onClick = { AppLog.clear() }) {
+            Icon(
+                Icons.Outlined.Delete, "Clear log",
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
     SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -704,66 +855,48 @@ private fun AppLogSection() {
     }
 }
 
-// ── Crash log section ──
+// ── Crash Log content ──
 
 @Composable
-private fun CrashLogSection() {
+private fun CrashLogContent() {
     val context = LocalContext.current
     var crashCount by remember { mutableStateOf(CrashLogger.getCrashCount()) }
-    var expanded by remember { mutableStateOf(false) }
-    var crashText by remember { mutableStateOf("") }
+    val crashText = remember { CrashLogger.getLatestCrash() ?: "" }
 
-    if (crashCount == 0) return
+    if (crashCount == 0) {
+        Text(
+            "(no crashes recorded)",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+        return
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.End
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.BugReport, null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "Crash Logs ($crashCount)",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error
-            )
+        IconButton(onClick = {
+            val clipboard =
+                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = CrashLogger.getLatestCrash() ?: ""
+            clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
+            Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
+        }) {
+            Icon(Icons.Outlined.ContentCopy, "Copy crash", modifier = Modifier.size(18.dp))
         }
-        Row {
-            TextButton(onClick = {
-                expanded = !expanded
-                if (expanded) {
-                    crashText = CrashLogger.getLatestCrash() ?: ""
-                }
-            }) {
-                Text(if (expanded) "Hide" else "Show", fontSize = 12.sp)
-            }
-            IconButton(onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val text = CrashLogger.getLatestCrash() ?: ""
-                clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
-                Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
-            }) {
-                Icon(Icons.Outlined.ContentCopy, "Copy crash", modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = {
-                CrashLogger.clearAll()
-                crashCount = 0
-                expanded = false
-            }) {
-                Icon(Icons.Outlined.Delete, "Clear crashes", modifier = Modifier.size(18.dp))
-            }
+        IconButton(onClick = {
+            CrashLogger.clearAll()
+            crashCount = 0
+        }) {
+            Icon(Icons.Outlined.Delete, "Clear crashes", modifier = Modifier.size(18.dp))
         }
     }
 
-    if (expanded && crashText.isNotEmpty()) {
+    if (crashText.isNotEmpty()) {
         SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
             Text(
                 text = crashText,
@@ -775,65 +908,138 @@ private fun CrashLogSection() {
     }
 }
 
-// ── Setup items ──
-
-@Composable
-private fun InputMethodButton() {
-    val context = LocalContext.current
-    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    val isEnabled = imm.enabledInputMethodList.any { it.packageName == context.packageName }
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.input_method_button)) },
-        leadingContent = { Icon(Icons.Outlined.Keyboard, null) },
-        supportingContent = {
-            if (isEnabled) {
-                Text("Enabled", color = Color(0xFF4CAF50))
-            } else {
-                Text(stringResource(R.string.input_method_description))
-            }
-        },
-        trailingContent = {
-            if (isEnabled) {
-                Icon(Icons.Outlined.CheckCircle, "Enabled", tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
-            } else {
-                Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
-            }
-        },
-        modifier = Modifier.clickable(onClick = {
-            context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
-        })
-    )
-}
+// ── Setup section (auto-collapses when complete) ──
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun PermissionButton() {
+private fun SetupSection(sharedPref: android.content.SharedPreferences) {
+    val context = LocalContext.current
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val isKeyboardEnabled =
+        imm.enabledInputMethodList.any { it.packageName == context.packageName }
     val micPermissionState = rememberPermissionState(
         permission = android.Manifest.permission.RECORD_AUDIO
     )
-    val granted = micPermissionState.status.isGranted
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.permission_button)) },
-        leadingContent = { Icon(Icons.Outlined.Mic, null) },
-        supportingContent = {
-            if (granted) {
-                Text("Granted", color = Color(0xFF4CAF50))
+    val isMicGranted = micPermissionState.status.isGranted
+    val setupComplete = isKeyboardEnabled && isMicGranted
+    var expanded by remember { mutableStateOf(!setupComplete) }
+
+    if (setupComplete && !expanded) {
+        // Compact: setup complete
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.CheckCircle,
+                        null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Setup complete",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 0.5.sp,
+                    )
+                }
+                Icon(
+                    Icons.Outlined.ExpandMore,
+                    contentDescription = "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
-        },
-        trailingContent = {
-            if (granted) {
-                Icon(Icons.Outlined.CheckCircle, "Granted", tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
-            } else {
-                Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
+        }
+    } else {
+        SectionCard(title = "Setup") {
+            // Enable keyboard
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.input_method_button)) },
+                leadingContent = { Icon(Icons.Outlined.Keyboard, null) },
+                supportingContent = {
+                    if (isKeyboardEnabled) {
+                        Text("Enabled", color = Color(0xFF4CAF50))
+                    } else {
+                        Text(stringResource(R.string.input_method_description))
+                    }
+                },
+                trailingContent = {
+                    if (isKeyboardEnabled) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            "Enabled",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
+                    }
+                },
+                modifier = Modifier.clickable(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                })
+            )
+            // Mic permission
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.permission_button)) },
+                leadingContent = { Icon(Icons.Outlined.Mic, null) },
+                supportingContent = {
+                    if (isMicGranted) {
+                        Text("Granted", color = Color(0xFF4CAF50))
+                    }
+                },
+                trailingContent = {
+                    if (isMicGranted) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            "Granted",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
+                    }
+                },
+                modifier = Modifier.clickable(onClick = {
+                    if (!isMicGranted) {
+                        micPermissionState.launchPermissionRequest()
+                    }
+                })
+            )
+            // Keyboard picker
+            KeyboardPickerItem(sharedPref)
+
+            // Collapse button if setup is done
+            if (setupComplete) {
+                TextButton(
+                    onClick = { expanded = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                ) {
+                    Text("Collapse", fontSize = 12.sp)
+                }
             }
-        },
-        modifier = Modifier.clickable(onClick = {
-            if (!granted) {
-                micPermissionState.launchPermissionRequest()
-            }
-        })
-    )
+        }
+    }
 }
+
+// ── Keyboard picker ──
 
 @Composable
 private fun KeyboardPickerItem(sharedPref: android.content.SharedPreferences) {
@@ -873,8 +1079,7 @@ private fun KeyboardPickerItem(sharedPref: android.content.SharedPreferences) {
                             modifier = Modifier.clickable {
                                 selectedId = ""
                                 with(sharedPref.edit()) {
-                                    putString("preferred_keyboard", "")
-                                    apply()
+                                    putString("preferred_keyboard", ""); apply()
                                 }
                                 expanded = false
                             }
@@ -888,8 +1093,7 @@ private fun KeyboardPickerItem(sharedPref: android.content.SharedPreferences) {
                             modifier = Modifier.clickable {
                                 selectedId = ime.id
                                 with(sharedPref.edit()) {
-                                    putString("preferred_keyboard", ime.id)
-                                    apply()
+                                    putString("preferred_keyboard", ime.id); apply()
                                 }
                                 expanded = false
                             }
@@ -913,7 +1117,7 @@ private fun ApiKeyField(
     onVerify: suspend (String) -> ApiKeyValidator.Result
 ) {
     var showKey by remember { mutableStateOf(false) }
-    var verifyState by remember { mutableStateOf<String?>(null) } // null=idle, ""=loading, "valid", "error:..."
+    var verifyState by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     ListItem(
@@ -937,9 +1141,14 @@ private fun ApiKeyField(
                     value = value,
                     onValueChange = {
                         onValueChange(it)
-                        verifyState = null // reset on edit
+                        verifyState = null
                     },
-                    placeholder = { Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                    placeholder = {
+                        Text(
+                            placeholder,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    },
                     label = { Text(label) },
                     singleLine = true,
                     visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
@@ -957,25 +1166,36 @@ private fun ApiKeyField(
                         .padding(top = 8.dp)
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Status text
                     when {
-                        verifyState == "" -> Text("Verifying...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        verifyState == "valid" -> Text("Key verified", fontSize = 12.sp, color = Color(0xFF4CAF50))
+                        verifyState == "" -> Text(
+                            "Verifying...",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        verifyState == "valid" -> Text(
+                            "Key verified",
+                            fontSize = 12.sp,
+                            color = Color(0xFF4CAF50)
+                        )
+
                         verifyState?.startsWith("error:") == true -> Text(
                             verifyState!!.removePrefix("error:"),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.error
                         )
+
                         else -> Spacer(Modifier)
                     }
-                    // Verify button
                     TextButton(
                         onClick = {
-                            verifyState = "" // loading
+                            verifyState = ""
                             coroutineScope.launch {
                                 val result = onVerify(value)
                                 verifyState = when (result) {
@@ -988,7 +1208,10 @@ private fun ApiKeyField(
                         contentPadding = ButtonDefaults.TextButtonContentPadding,
                     ) {
                         if (verifyState == "") {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp
+                            )
                             Spacer(Modifier.width(4.dp))
                         }
                         Text("Verify", fontSize = 13.sp)
