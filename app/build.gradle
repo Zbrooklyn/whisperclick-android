@@ -7,6 +7,15 @@ android {
     namespace 'com.nefeshcore.whisperclick'
     compileSdk 34
 
+    signingConfigs {
+        debug {
+            storeFile file("${rootProject.projectDir}/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
     defaultConfig {
         applicationId "com.nefeshcore.whisperclick"
         minSdk 28
