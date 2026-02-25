@@ -244,21 +244,23 @@ private fun RepeatKeyButton(
     val interactionSource = remember { MutableInteractionSource() }
     var pressing by remember { mutableStateOf(false) }
 
-    // Track press/release state
+    // Fire immediately on press, track state for repeat
     LaunchedEffect(interactionSource) {
         interactionSource.interactions.collect { interaction ->
             when (interaction) {
-                is PressInteraction.Press -> pressing = true
+                is PressInteraction.Press -> {
+                    pressing = true
+                    currentOnClick() // Fire instantly — don't wait for recomposition
+                }
                 is PressInteraction.Release -> pressing = false
                 is PressInteraction.Cancel -> pressing = false
             }
         }
     }
 
-    // Fire immediately on press, then repeat after initial delay
+    // Repeat while held down (first fire already happened above)
     LaunchedEffect(pressing) {
         if (pressing) {
-            currentOnClick()
             delay(initialDelayMs)
             while (true) {
                 currentOnClick()
