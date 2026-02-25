@@ -18,9 +18,7 @@ private val ColorScheme = darkColorScheme(
 
     // Surface — backgrounds, cards, list items
     surface = Surface,
-    surfaceDim = SurfaceDim,
     surfaceVariant = SurfaceVariant,
-    surfaceBright = SurfaceBright,
     onSurface = OnSurface,
     onSurfaceVariant = OnSurfaceVariant,
 
