@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Keyboard
@@ -89,6 +90,7 @@ import com.nefeshcore.whisperclick.R
 import com.nefeshcore.whisperclick.api.ApiKeyValidator
 import com.nefeshcore.whisperclick.model.ModelManager
 import com.nefeshcore.whisperclick.utils.AppLog
+import com.nefeshcore.whisperclick.utils.CrashLogger
 import kotlinx.coroutines.launch
 
 @Composable
@@ -584,6 +586,7 @@ private fun MainScreen(
                         onClick = onRecordTapped
                     )
                     AppLogSection()
+                    CrashLogSection()
                 }
             }
 
@@ -698,6 +701,77 @@ private fun AppLogSection() {
             lineHeight = 15.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+// ── Crash log section ──
+
+@Composable
+private fun CrashLogSection() {
+    val context = LocalContext.current
+    var crashCount by remember { mutableStateOf(CrashLogger.getCrashCount()) }
+    var expanded by remember { mutableStateOf(false) }
+    var crashText by remember { mutableStateOf("") }
+
+    if (crashCount == 0) return
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.BugReport, null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "Crash Logs ($crashCount)",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        Row {
+            TextButton(onClick = {
+                expanded = !expanded
+                if (expanded) {
+                    crashText = CrashLogger.getLatestCrash() ?: ""
+                }
+            }) {
+                Text(if (expanded) "Hide" else "Show", fontSize = 12.sp)
+            }
+            IconButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val text = CrashLogger.getLatestCrash() ?: ""
+                clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
+                Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(Icons.Outlined.ContentCopy, "Copy crash", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = {
+                CrashLogger.clearAll()
+                crashCount = 0
+                expanded = false
+            }) {
+                Icon(Icons.Outlined.Delete, "Clear crashes", modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+
+    if (expanded && crashText.isNotEmpty()) {
+        SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Text(
+                text = crashText,
+                fontSize = 10.sp,
+                lineHeight = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
