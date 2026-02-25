@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -102,6 +104,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         onCancel = service::cancelTranscription,
                         modifier = Modifier
                             .weight(1f, true)
+                            .height(56.dp)
                             .padding(btnPad),
                         shape = shape,
                     )
@@ -319,27 +322,32 @@ private fun RecordButton(
         }
         onClick()
     }, enabled = enabled || isTranscribing, modifier = modifier, shape = shape) {
+        val iconSize = 28.dp
+        val textSize = 18.sp
         if (isTranscribing) {
             firstRender = false
-            Icon(Icons.Outlined.Close, "Cancel")
-            Text(" Cancel", fontSize = 16.sp)
+            Icon(Icons.Outlined.Close, "Cancel", modifier = Modifier.defaultMinSize(iconSize, iconSize))
+            Text(" Cancel", fontSize = textSize)
         } else if (!enabled && firstRender) {
             Icon(
-                Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording)
+                Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
+                modifier = Modifier.defaultMinSize(iconSize, iconSize)
             )
         } else if (!enabled) {
             firstRender = false
-            Text(stringResource(R.string.transcribing), fontSize = 16.sp)
+            Text(stringResource(R.string.transcribing), fontSize = textSize)
         } else if (isRecording) {
             firstRender = false
-            Icon(Icons.Outlined.Stop, stringResource(R.string.stop_recording))
+            Icon(Icons.Outlined.Stop, stringResource(R.string.stop_recording),
+                modifier = Modifier.defaultMinSize(iconSize, iconSize))
             Text(
                 " %d:%02d".format(seconds / 60, seconds % 60),
-                fontSize = 16.sp
+                fontSize = textSize
             )
         } else {
             Icon(
-                Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording)
+                Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
+                modifier = Modifier.defaultMinSize(iconSize, iconSize)
             )
         }
     }
