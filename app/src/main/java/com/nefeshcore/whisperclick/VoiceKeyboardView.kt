@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Cloud
@@ -46,6 +51,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -71,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
 import kotlinx.coroutines.delay
@@ -90,7 +97,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
     @Composable
     override fun Content() {
         var showEditRow by remember { mutableStateOf(false) }
-        val pagerState = rememberPagerState(pageCount = { 2 })
+        val pagerState = rememberPagerState(pageCount = { 3 })
         val coroutineScope = rememberCoroutineScope()
 
         val prefs = service.getSharedPreferences(
@@ -98,15 +105,41 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
         )
         val themeMode = prefs.getString("theme_mode", "dark") ?: "dark"
         KaiboardTheme(themeMode = themeMode) {
+            // Animate height: keyboard is compact, panels (rewrite/clipboard) need more room
+            val keyboardHeight = if (showEditRow) 96.dp else 56.dp
+            val panelHeight = 160.dp
+            val scrollProgress = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+                .coerceIn(0f, 2f)
+            // Height transitions once from keyboard→panel, stays at panel for pages 1-2
+            val heightFraction = scrollProgress.coerceAtMost(1f)
+            val pagerHeight = lerp(keyboardHeight, panelHeight, heightFraction)
+
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(pagerHeight)
                     .background(MaterialTheme.colorScheme.surface)
             ) { page ->
                 when (page) {
-                    0 -> KeyboardPage(showEditRow, onEditRowToggle = { showEditRow = it })
+                    0 -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        KeyboardPage(
+                            showEditRow = showEditRow,
+                            onEditRowToggle = { showEditRow = it },
+                            onNavigateToClipboard = {
+                                coroutineScope.launch { pagerState.animateScrollToPage(2) }
+                            }
+                        )
+                    }
                     1 -> RewritePanel(
+                        onBack = {
+                            coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                        }
+                    )
+                    2 -> ClipboardPanel(
                         onBack = {
                             coroutineScope.launch { pagerState.animateScrollToPage(0) }
                         }
@@ -117,7 +150,11 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
     }
 
     @Composable
-    private fun KeyboardPage(showEditRow: Boolean, onEditRowToggle: (Boolean) -> Unit) {
+    private fun KeyboardPage(
+        showEditRow: Boolean,
+        onEditRowToggle: (Boolean) -> Unit,
+        onNavigateToClipboard: () -> Unit
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -231,6 +268,10 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         )
                     }) {
                         Icon(Icons.Outlined.Redo, "Redo")
+                    }
+                    // Clipboard history — jumps to page 2
+                    EditButton(onClick = { onNavigateToClipboard() }) {
+                        Icon(Icons.Outlined.Assignment, "Clipboard History")
                     }
                     // Small settings button
                     OutlinedButton(
@@ -459,6 +500,150 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+    @Composable
+    private fun ClipboardPanel(onBack: () -> Unit) {
+        val history = service.clipboardHistory
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Assignment,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Clipboard",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Row {
+                    if (history.isNotEmpty()) {
+                        TextButton(
+                            onClick = { service.clearClipHistory() },
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        ) {
+                            Text("Clear All", fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    OutlinedButton(
+                        onClick = onBack,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Icon(Icons.Outlined.KeyboardArrowLeft, null, modifier = Modifier.size(16.dp))
+                        Text("Back", fontSize = 13.sp)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            if (history.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No clipboard history yet",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    itemsIndexed(history) { index, entry ->
+                        ClipEntryRow(
+                            entry = entry,
+                            onPaste = {
+                                service.pasteClipEntry(entry.text)
+                                onBack()
+                            },
+                            onDelete = { service.deleteClipEntry(index) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ClipEntryRow(
+        entry: ClipEntry,
+        onPaste: () -> Unit,
+        onDelete: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .clickable { onPaste() }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    entry.text,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    relativeTime(entry.timestamp),
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Close,
+                    "Delete",
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    private fun relativeTime(timestamp: Long): String {
+        val diff = System.currentTimeMillis() - timestamp
+        return when {
+            diff < 60_000 -> "Just now"
+            diff < 3600_000 -> "${diff / 60_000}m ago"
+            diff < 86400_000 -> "${diff / 3600_000}h ago"
+            else -> "${diff / 86400_000}d ago"
         }
     }
 }

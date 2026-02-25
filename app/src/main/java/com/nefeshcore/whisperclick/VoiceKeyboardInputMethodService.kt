@@ -1,5 +1,6 @@
 package com.nefeshcore.whisperclick
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
@@ -39,6 +40,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+
+data class ClipEntry(val text: String, val timestamp: Long)
 
 private const val LOG_TAG = "VoiceKeyboardInputMethodService"
 
@@ -136,6 +139,10 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
         useCloudStt = sharedPref?.getString("stt_mode", "local") == "cloud"
 
+        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboardManager?.addPrimaryClipChangedListener(clipListener)
+        loadClipHistory()
+
         scope.launch {
             printSystemInfo()
             loadData()
@@ -150,6 +157,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         if (ctx != null) {
             CoroutineScope(Dispatchers.Default).launch { ctx.release() }
         }
+        clipboardManager?.removePrimaryClipChangedListener(clipListener)
         job.cancel()
         handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
@@ -240,6 +248,76 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         rewriteVariants = null
         rewriteError = null
         isRewriting = false
+    }
+
+    // --- Clipboard History ---
+    var clipboardHistory by mutableStateOf<List<ClipEntry>>(emptyList())
+        private set
+
+    private var clipboardManager: ClipboardManager? = null
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
+        val clip = clipboardManager?.primaryClip ?: return@OnPrimaryClipChangedListener
+        if (clip.itemCount > 0) {
+            val text = clip.getItemAt(0).text?.toString() ?: return@OnPrimaryClipChangedListener
+            if (text.isNotBlank()) {
+                addClipEntry(text)
+            }
+        }
+    }
+
+    private fun addClipEntry(text: String) {
+        val entry = ClipEntry(text, System.currentTimeMillis())
+        val current = clipboardHistory.toMutableList()
+        current.removeAll { it.text == text }
+        current.add(0, entry)
+        if (current.size > 50) current.subList(50, current.size).clear()
+        clipboardHistory = current
+        saveClipHistory()
+    }
+
+    fun pasteClipEntry(text: String) {
+        haptic()
+        currentInputConnection?.commitText(text, 1)
+    }
+
+    fun deleteClipEntry(index: Int) {
+        val current = clipboardHistory.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            clipboardHistory = current
+            saveClipHistory()
+        }
+    }
+
+    fun clearClipHistory() {
+        clipboardHistory = emptyList()
+        saveClipHistory()
+    }
+
+    private fun loadClipHistory() {
+        val json = sharedPref?.getString("clipboard_history", "[]") ?: "[]"
+        try {
+            val arr = org.json.JSONArray(json)
+            val list = mutableListOf<ClipEntry>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(ClipEntry(obj.getString("text"), obj.getLong("ts")))
+            }
+            clipboardHistory = list
+        } catch (e: Exception) {
+            AppLog.log("Clipboard", "Failed to load history: ${e.message}")
+        }
+    }
+
+    private fun saveClipHistory() {
+        val arr = org.json.JSONArray()
+        clipboardHistory.forEach { entry ->
+            val obj = org.json.JSONObject()
+            obj.put("text", entry.text)
+            obj.put("ts", entry.timestamp)
+            arr.put(obj)
+        }
+        sharedPref?.edit()?.putString("clipboard_history", arr.toString())?.apply()
     }
 
     // Legacy single-style rewrite (kept for compatibility)

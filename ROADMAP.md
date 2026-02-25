@@ -10,23 +10,28 @@
 ### What Works
 - On-device transcription via whisper.cpp v1.8.3 (Q5_1 quantized models)
 - Cloud transcription via OpenAI Whisper API
-- Magic Rewrite (Gemini 2.0 Flash / GPT-4o-mini) with 5 styles
-- Full IME keyboard: mic, arrows, backspace, enter, edit toolbar
+- Magic Rewrite (swipe-right panel) — single API call returns Clean + 4 style variants as carousel
+- Rewrite undo — one-tap revert after applying a rewrite
+- Clipboard history — captures copies from any app, 3rd swipe page + edit toolbar button, tap to paste
+- Full IME keyboard: mic, arrows, backspace, enter, edit toolbar with clipboard history button
+- 3-page HorizontalPager: keyboard, Magic Rewrite, clipboard history
 - Model download with resume support (7 models from Hugging Face)
 - API key validation for OpenAI and Gemini
-- Theme support (Light / Dark / OLED)
+- Unified AI Provider settings — one provider picker, one API key (powers Cloud STT + Magic Rewrite)
+- Theme support (Light / Dark / OLED) with live switching and system bar color sync
 - Settings UI with logical grouping, dynamic sections, collapsible debug
 - CPU variant detection (ARM64 FP16, ARMv7 VFPv4)
-- Haptic feedback, audio focus management
+- Haptic feedback (crash-safe), audio focus management
 - On-device crash logger with in-app viewer
 - Versioned APK filenames + GitHub Releases (direct APK download)
 - Version displayed from BuildConfig (auto-updates with builds)
 - Log deduplication (suppresses repeated messages)
+- Gemini API key passed via header (not URL query parameter)
 
 ### What's Missing
 No text keyboard, no punctuation/numbers/emoji, no VAD, no streaming,
 no tests, plaintext API key storage, empty ProGuard rules, no accessibility labels,
-no clipboard history, no auto-switch-back keyboard.
+no auto-switch-back keyboard, no Gemini Cloud STT.
 
 ---
 
@@ -38,7 +43,7 @@ no clipboard history, no auto-switch-back keyboard.
 | # | Issue | Status | File(s) |
 |---|-------|--------|---------|
 | 1 | **Encrypt API keys** — Move from plaintext SharedPreferences to EncryptedSharedPreferences | TODO | MainScreen.kt, VoiceKeyboardInputMethodService.kt |
-| 2 | **Gemini key in URL** — Pass via header (`x-goog-api-key`) instead of query parameter (leaks in logs/analytics) | TODO | GeminiClient.kt |
+| 2 | ~~Gemini key in URL~~ — Pass via header (`x-goog-api-key`) instead of query parameter | DONE | GeminiClient.kt |
 | 3 | **ProGuard rules** — Add keep rules for JNI classes (`WhisperLib`, `WhisperCpuConfig`), Compose, and API model classes | TODO | proguard-rules.pro |
 | 4 | ~~Replace `runBlocking` in `onDestroy`~~ — Non-blocking destroy with fire-and-forget release | DONE | VoiceKeyboardInputMethodService.kt |
 | 5 | ~~Cancel coroutine scope on destroy~~ — `job.cancel()` in `onDestroy` | DONE | VoiceKeyboardInputMethodService.kt |
@@ -50,47 +55,48 @@ no clipboard history, no auto-switch-back keyboard.
 | 11 | ~~VIBRATE permission~~ — Added to manifest + crash-safe `haptic()` | DONE | AndroidManifest.xml, VoiceKeyboardInputMethodService.kt |
 | 12 | ~~ViewModelStoreOwner for Compose IME~~ — Added missing interface + complete view tree setup | DONE | VoiceKeyboardInputMethodService.kt |
 | 13 | ~~Enter key logic~~ — Newline in multi-line fields, IME action in single-line | DONE | VoiceKeyboardInputMethodService.kt |
-| 14 | ~~Settings redesign~~ — Dynamic sections, collapsible debug, logical grouping | DONE | MainScreen.kt |
+| 14 | ~~Settings redesign~~ — Dynamic sections, collapsible debug, unified AI Provider, logical grouping | DONE | MainScreen.kt |
 | 15 | ~~Versioned APK + GitHub Releases~~ — Auto-named APKs, direct download | DONE | build.gradle, android_build.yml |
 | 16 | ~~Log deduplication~~ — Suppress repeated consecutive messages | DONE | AppLog.kt |
+| 17 | ~~Theme reactivity~~ — Live theme switching via SharedPreferences listener + system bar color sync | DONE | MainActivity.kt |
 
 ---
 
 ### v0.10.0-beta — Core Features
 > Goal: Make WhisperClick a complete daily-driver keyboard.
 
-| # | Feature | Priority | Notes |
-|---|---------|----------|-------|
-| 1 | **Magic Rewrite panel (swipe-right)** — Swipe right on keyboard to reveal rewrite panel. Uses `HorizontalPager` (page 0 = keyboard, page 1 = rewrite). Single API call returns structured JSON with clean + all style variants. Two-step flow: (1) Clean baseline fixes spelling, grammar, punctuation; (2) style variants (Professional, Casual, Concise, Emojify) are derived from the clean text. Results shown as horizontal carousel with dot indicators. "Clean" is always the first card (most common use case for voice transcription). Tap [Use] to apply and auto-swipe back to keyboard | HIGH | Replaces current dead-code MagicMenu.kt. One API call instead of 5. JSON response: `{"clean":"...","professional":"...","casual":"...","concise":"...","emojify":"..."}` |
-| 2 | **Text keyboard fallback** — Full QWERTY layout users can switch to for manual typing | HIGH | Required for Play Store viability. Users need a way to type when they can't speak |
-| 3 | **Punctuation & numbers row** — Quick access to . , ! ? 0-9 without switching keyboards | HIGH | Can be a top row or swipe-up overlay |
-| 4 | **Voice Activity Detection (VAD)** — Auto-start/stop recording when user speaks/pauses | HIGH | Silero VAD is lightweight (~2MB). Eliminates manual start/stop |
-| 5 | **Last-used keyboard auto-switch** — Track which keyboard user switched FROM and auto-switch back to it. Uses ContentObserver on `Settings.Secure.DEFAULT_INPUT_METHOD` to record previous IME. Falls back to preferred keyboard setting if no history | HIGH | Better UX than cycling through all keyboards |
-| 6 | **Clipboard history** — Build our own clipboard history using `ClipboardManager.addPrimaryClipChangedListener()`. Captures copies from any app. Button on keyboard opens recent clips for quick paste. Stored locally, auto-prune old entries | HIGH | System clipboard listener is app-agnostic — works regardless of which keyboard copied the text. Cannot sync with Samsung/Gboard proprietary history but captures the same content independently |
-| 7 | **Cloud STT: Gemini support** — Add Gemini as a cloud STT provider alongside OpenAI. Users pick one cloud provider for both STT and rewrite — no separate API keys needed. Gemini's multimodal API accepts audio directly. STT mode becomes: Local Whisper / Cloud (uses whichever AI provider is selected in Magic Rewrite). One API key per provider handles everything | HIGH | Currently cloud STT is OpenAI-only. Unifying provider selection means users with a Gemini key get both rewrite and cloud STT without needing an OpenAI key, and vice versa |
-| 8 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
-| 9 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
-| 10 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
-| 11 | **Custom rewrite prompts** — User-defined 6th card in the rewrite carousel. TextField where user types their own instruction (e.g. "Rewrite as if explaining to a 5-year-old"). Separate API call since it's user-defined. Saved styles persist in SharedPreferences | LOW | Builds on top of the swipe-right rewrite panel |
-| 12 | **Rewrite undo** — One-tap revert after applying a rewrite. Stores original text so user can undo if the result isn't right | LOW | Simple: save original in a variable before replacing |
+| # | Feature | Priority | Status | Notes |
+|---|---------|----------|--------|-------|
+| 1 | ~~Magic Rewrite panel (swipe-right)~~ — HorizontalPager page 1. Single API call returns structured JSON with Clean + 4 style variants as carousel. Tap [Use] to apply and auto-swipe back | HIGH | DONE | Replaced dead-code MagicMenu.kt. JSON: `{"clean":"...","professional":"...","casual":"...","concise":"...","emojify":"..."}` |
+| 2 | **Text keyboard fallback** — Full QWERTY layout users can switch to for manual typing | HIGH | TODO | Required for Play Store viability. Users need a way to type when they can't speak |
+| 3 | **Punctuation & numbers row** — Quick access to . , ! ? 0-9 without switching keyboards | HIGH | TODO | Can be a top row or swipe-up overlay |
+| 4 | **Voice Activity Detection (VAD)** — Auto-start/stop recording when user speaks/pauses | HIGH | TODO | Silero VAD is lightweight (~2MB). Eliminates manual start/stop |
+| 5 | **Last-used keyboard auto-switch** — Track which keyboard user switched FROM and auto-switch back to it. Uses ContentObserver on `Settings.Secure.DEFAULT_INPUT_METHOD` to record previous IME | HIGH | TODO | Better UX than cycling through all keyboards |
+| 6 | ~~Clipboard history~~ — `ClipboardManager.addPrimaryClipChangedListener()` captures copies from any app. 3rd HorizontalPager page + edit toolbar button for direct access. LazyColumn of entries with tap-to-paste, delete, clear all. JSON in SharedPreferences, 50 entry cap, deduplication | HIGH | DONE | System clipboard listener is app-agnostic. Captures same content as Samsung/Gboard independently |
+| 7 | **Cloud STT: Gemini support** — Add Gemini as a cloud STT provider alongside OpenAI. Unified provider selection means one API key per provider handles everything | HIGH | TODO | Currently cloud STT is OpenAI-only |
+| 8 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | TODO | whisper.cpp supports chunked processing. Improves perceived speed |
+| 9 | **Emoji picker** — Basic emoji grid or search | MEDIUM | TODO | Android IME standard expectation |
+| 10 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | TODO | Multilingual models already available; just need UI + JNI param |
+| 11 | **Custom rewrite prompts** — User-defined 6th card in the rewrite carousel. TextField where user types their own instruction. Saved styles persist in SharedPreferences | LOW | TODO | Builds on top of the swipe-right rewrite panel |
+| 12 | ~~Rewrite undo~~ — One-tap revert after applying a rewrite. Stores original text so user can undo | LOW | DONE | `undoRewrite()` + `preRewriteText` in service |
 
 ---
 
 ### v0.11.0-beta — Polish & Performance
 > Goal: Fast, reliable, accessible.
 
-| # | Item | Category | Notes |
-|---|------|----------|-------|
-| 1 | ~~Version from BuildConfig~~ — Use `BuildConfig.VERSION_NAME` everywhere | DONE | Completed in v0.9.1-beta |
-| 2 | **Accessibility labels** — Add `contentDescription` to all icons and interactive elements | Accessibility | Currently most icons have hardcoded English strings, some are missing entirely |
-| 3 | **TalkBack support** — Verify full keyboard navigation works with screen reader | Accessibility | Required for Play Store accessibility guidelines |
-| 4 | **Connection timeout tuning** — Reduce cloud API timeouts when on slow networks. Add user-visible retry | Performance | Current: 15s connect, 30s read |
-| 5 | **Model loading indicator** — Show progress when whisper model is being loaded into memory (can take 2-5s on cold start) | UX | Users currently see a dead mic button with no explanation |
-| 6 | **Keyboard height preference** — Let users adjust keyboard height (compact/normal/tall) | UX | Important for tablets and small phones |
-| 7 | **Sound feedback option** — Optional click/beep sounds in addition to haptics | UX | Some users prefer audible feedback |
-| 8 | **Landscape layout** — Optimize keyboard layout for horizontal orientation | UX | Current layout stretches awkwardly in landscape |
-| 9 | **Remove dead code** — Delete unused files: MagicMenu.kt (no UI trigger), ModelSelector.kt (unused), BatteryMonitor.kt, MemoryMonitor.kt | Cleanup | Reduces APK size and confusion |
-| 10 | **Benchmark improvements** — Show model inference time in settings for users to compare models | Performance | Data already available from whisper; just needs UI |
+| # | Item | Category | Status | Notes |
+|---|------|----------|--------|-------|
+| 1 | ~~Version from BuildConfig~~ — Use `BuildConfig.VERSION_NAME` everywhere | UX | DONE | Completed in v0.9.1-beta |
+| 2 | **Accessibility labels** — Add `contentDescription` to all icons and interactive elements | Accessibility | TODO | Currently most icons have hardcoded English strings, some are missing entirely |
+| 3 | **TalkBack support** — Verify full keyboard navigation works with screen reader | Accessibility | TODO | Required for Play Store accessibility guidelines |
+| 4 | **Connection timeout tuning** — Reduce cloud API timeouts when on slow networks. Add user-visible retry | Performance | TODO | Current: 15s connect, 30s read |
+| 5 | **Model loading indicator** — Show progress when whisper model is being loaded into memory (can take 2-5s on cold start) | UX | TODO | Users currently see a dead mic button with no explanation |
+| 6 | **Keyboard height preference** — Let users adjust keyboard height (compact/normal/tall) | UX | TODO | Important for tablets and small phones |
+| 7 | **Sound feedback option** — Optional click/beep sounds in addition to haptics | UX | TODO | Some users prefer audible feedback |
+| 8 | **Landscape layout** — Optimize keyboard layout for horizontal orientation | UX | TODO | Current layout stretches awkwardly in landscape |
+| 9 | ~~Remove dead code~~ — Deleted: MagicMenu.kt, ModelSelector.kt, BatteryMonitor.kt, MemoryMonitor.kt | Cleanup | DONE | Reduces APK size and confusion |
+| 10 | **Benchmark improvements** — Show model inference time in settings for users to compare models | Performance | TODO | Data already available from whisper; just needs UI |
 
 ---
 
@@ -132,7 +138,7 @@ no clipboard history, no auto-switch-back keyboard.
 #### Battery & Memory
 - [ ] Profile memory usage under sustained recording
 - [ ] Ensure whisper context is fully freed when switching apps
-- [ ] Battery usage report in settings (leverage existing BatteryMonitor.kt or remove it)
+- [ ] Battery usage report in settings (or remove BatteryMonitor.kt — already deleted)
 
 ---
 
@@ -167,6 +173,8 @@ Decisions made during development that should be preserved.
 | Cloud STT as fallback, not primary | On-device privacy is the product differentiator. Cloud is opt-in for users who want speed/accuracy | 2026-01 |
 | Own clipboard history over Samsung sync | Samsung/Gboard clipboard APIs are proprietary. System ClipboardManager listener captures same content app-agnostically | 2026-02 |
 | ContentObserver for last-used keyboard | No Android API for "previous IME". Track changes to DEFAULT_INPUT_METHOD setting and save last non-WhisperClick value | 2026-02 |
+| Unified AI Provider settings | One provider picker + one API key instead of separate fields in STT and Rewrite sections. Eliminates "which key goes where" confusion | 2026-02 |
+| HorizontalPager with animated height | 3-page pager (keyboard, rewrite, clipboard) with lerp-based height transition. Keyboard pins to bottom, panels use full height | 2026-02 |
 
 ---
 

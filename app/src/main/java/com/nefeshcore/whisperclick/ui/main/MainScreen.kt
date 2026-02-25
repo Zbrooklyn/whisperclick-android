@@ -396,19 +396,25 @@ private fun MainScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        // Cloud mode — show OpenAI API key
-                        ApiKeyField(
-                            label = "OpenAI API Key",
-                            value = openaiApiKey,
-                            placeholder = "sk-...",
-                            onValueChange = {
-                                openaiApiKey = it
-                                with(sharedPref.edit()) {
-                                    putString("openai_api_key", it)
-                                    apply()
-                                }
+                        // Cloud mode — references AI Provider key
+                        val providerName = if (aiProvider == "gemini") "Gemini" else "OpenAI"
+                        val hasKey = if (aiProvider == "gemini") geminiApiKey.isNotEmpty() else openaiApiKey.isNotEmpty()
+                        ListItem(
+                            headlineContent = { Text("Cloud Transcription") },
+                            leadingContent = {
+                                Icon(
+                                    if (hasKey) Icons.Outlined.CheckCircle else Icons.Outlined.Key,
+                                    null,
+                                    tint = if (hasKey) Color(0xFF4CAF50)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             },
-                            onVerify = { ApiKeyValidator.validateOpenAI(it) }
+                            supportingContent = {
+                                Text(
+                                    if (hasKey) "Using $providerName API key for transcription"
+                                    else "Set your $providerName API key in AI Provider below"
+                                )
+                            }
                         )
                     }
                 }
@@ -453,20 +459,19 @@ private fun MainScreen(
                 }
             }
 
-            // ── Magic Rewrite ──
+            // ── AI Provider (unified: powers Cloud STT + Magic Rewrite) ──
             item {
-                SectionCard(title = "Magic Rewrite") {
-                    // Description
+                SectionCard(title = "AI Provider") {
                     ListItem(
-                        headlineContent = { Text("AI Text Rewrite") },
-                        leadingContent = { Icon(Icons.Outlined.Star, null) },
+                        headlineContent = { Text("Cloud AI Services") },
+                        leadingContent = { Icon(Icons.Outlined.Key, null) },
                         supportingContent = {
-                            Text("Rewrite selected text using AI. Long-press the mic button to access rewrite styles.")
+                            Text("Your API key powers Cloud STT and Magic Rewrite. Swipe right on the keyboard to access rewrite styles.")
                         }
                     )
                     // Provider picker
                     ListItem(
-                        headlineContent = { Text("AI Provider") },
+                        headlineContent = { Text("Provider") },
                         supportingContent = {
                             Row(
                                 modifier = Modifier
@@ -497,7 +502,7 @@ private fun MainScreen(
                             }
                         }
                     )
-                    // API Key — smart: don't duplicate if OpenAI key already shown in Cloud STT
+                    // Single API key field for selected provider
                     if (aiProvider == "gemini") {
                         ApiKeyField(
                             label = "Gemini API Key",
@@ -511,29 +516,7 @@ private fun MainScreen(
                             },
                             onVerify = { ApiKeyValidator.validateGemini(it) }
                         )
-                    } else if (aiProvider == "openai" && sttMode == "cloud") {
-                        // OpenAI key already entered in Cloud STT section
-                        ListItem(
-                            headlineContent = { Text("OpenAI API Key") },
-                            leadingContent = {
-                                Icon(
-                                    if (openaiApiKey.isNotEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.Key,
-                                    null,
-                                    tint = if (openaiApiKey.isNotEmpty()) Color(0xFF4CAF50)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            supportingContent = {
-                                Text(
-                                    if (openaiApiKey.isNotEmpty()) "Using key from Cloud STT"
-                                    else "Set your OpenAI key in the Cloud STT section above",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        )
                     } else {
-                        // OpenAI provider + local STT — show key field here
                         ApiKeyField(
                             label = "OpenAI API Key",
                             value = openaiApiKey,
