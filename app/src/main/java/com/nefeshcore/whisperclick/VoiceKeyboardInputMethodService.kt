@@ -124,6 +124,8 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
             getString(R.string.preference_file_key), Context.MODE_PRIVATE
         )
 
+        useCloudStt = sharedPref?.getString("stt_mode", "local") == "cloud"
+
         scope.launch {
             printSystemInfo()
             loadData()
@@ -208,8 +210,8 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     @Volatile
     private var transcriptionCancelled = false
     private var isModelLoading = false
-    private val useCloudStt: Boolean
-        get() = sharedPref?.getString("stt_mode", "local") == "cloud"
+    var useCloudStt by mutableStateOf(false)
+        private set
     private var modelsPath: File? = null
     private var samplesPath: File? = null
     private var sharedPref: SharedPreferences? = null
@@ -436,6 +438,14 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         } else {
             switchToNextInputMethod(false)
         }
+    }
+
+    fun toggleSttMode() {
+        haptic()
+        useCloudStt = !useCloudStt
+        sharedPref?.edit()?.putString("stt_mode", if (useCloudStt) "cloud" else "local")?.apply()
+        val mode = if (useCloudStt) "Cloud (OpenAI)" else "Local Whisper"
+        AppLog.log("Keyboard", "STT mode: $mode")
     }
 
     // Cloud STT via OpenAI Whisper API

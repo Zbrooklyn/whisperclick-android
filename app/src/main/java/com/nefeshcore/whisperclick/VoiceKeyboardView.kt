@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.KeyboardVoice
 import androidx.compose.material.icons.outlined.Redo
@@ -87,8 +88,10 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         enabled = service.canTranscribe,
                         isRecording = service.isRecording,
                         isTranscribing = service.isTranscribing,
+                        isCloudMode = service.useCloudStt,
                         onClick = service::toggleRecord,
                         onCancel = service::cancelTranscription,
+                        onLongPress = service::toggleSttMode,
                         modifier = Modifier
                             .weight(3f)
                             .padding(btnPad),
@@ -315,39 +318,68 @@ private fun RecordButton(
     enabled: Boolean,
     isRecording: Boolean,
     isTranscribing: Boolean,
+    isCloudMode: Boolean,
     onClick: () -> Unit,
     onCancel: () -> Unit,
+    onLongPress: () -> Unit,
     modifier: Modifier,
     shape: Shape
 ) {
     var firstRender by remember { mutableStateOf(true) }
     var seconds by remember { mutableIntStateOf(0) }
-    var handler: Handler? by remember { mutableStateOf(null) }
+    var timerHandler: Handler? by remember { mutableStateOf(null) }
     var start by remember { mutableLongStateOf(0) }
 
     val runnable: Runnable = object : Runnable {
         override fun run() {
             seconds = ((System.currentTimeMillis() - start) / 1000).toInt()
-            handler?.postDelayed(this, 1_000)
+            timerHandler?.postDelayed(this, 1_000)
         }
     }
 
-    Button(onClick = {
-        if (isTranscribing) {
-            onCancel()
-            return@Button
+    val interactionSource = remember { MutableInteractionSource() }
+    var longPressTriggered by remember { mutableStateOf(false) }
+
+    // Long-press detection only when idle (not recording, not transcribing)
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collectLatest { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> {
+                    longPressTriggered = false
+                    if (!isRecording && !isTranscribing) {
+                        delay(500)
+                        longPressTriggered = true
+                        onLongPress()
+                    }
+                }
+                is PressInteraction.Release -> {}
+            }
         }
-        if (!isRecording) {
-            start = System.currentTimeMillis()
-            seconds = 0
-            handler = Handler(Looper.getMainLooper())
-            handler!!.postDelayed(runnable, 1_000)
-        } else {
-            handler?.removeCallbacks(runnable)
-            handler = null
-        }
-        onClick()
-    }, enabled = enabled || isTranscribing, modifier = modifier, shape = shape) {
+    }
+
+    Button(
+        onClick = {
+            if (longPressTriggered) return@Button
+            if (isTranscribing) {
+                onCancel()
+                return@Button
+            }
+            if (!isRecording) {
+                start = System.currentTimeMillis()
+                seconds = 0
+                timerHandler = Handler(Looper.getMainLooper())
+                timerHandler!!.postDelayed(runnable, 1_000)
+            } else {
+                timerHandler?.removeCallbacks(runnable)
+                timerHandler = null
+            }
+            onClick()
+        },
+        enabled = enabled || isTranscribing,
+        interactionSource = interactionSource,
+        modifier = modifier,
+        shape = shape
+    ) {
         val iconSize = 28.dp
         val textSize = 18.sp
         if (isTranscribing) {
@@ -373,10 +405,14 @@ private fun RecordButton(
                 fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip
             )
         } else {
-            Icon(
-                Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
-                modifier = Modifier.defaultMinSize(iconSize, iconSize)
-            )
+            // Idle state — show mic icon + cloud/local indicator
+            if (isCloudMode) {
+                Icon(Icons.Outlined.Cloud, "Cloud STT",
+                    modifier = Modifier.defaultMinSize(iconSize, iconSize))
+            } else {
+                Icon(Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
+                    modifier = Modifier.defaultMinSize(iconSize, iconSize))
+            }
         }
     }
 }
