@@ -6,6 +6,8 @@ import android.os.Looper
 import android.view.KeyEvent
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,6 +48,7 @@ import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
 import kotlinx.coroutines.delay
@@ -284,6 +287,7 @@ private fun LongPressButton(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun RecordButton(
     enabled: Boolean,
     isRecording: Boolean,
@@ -326,7 +330,8 @@ private fun RecordButton(
         if (isTranscribing) {
             firstRender = false
             Icon(Icons.Outlined.Close, "Cancel", modifier = Modifier.defaultMinSize(iconSize, iconSize))
-            Text(" Cancel", fontSize = textSize)
+            Text(" Cancel", fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                modifier = Modifier.basicMarquee())
         } else if (!enabled && firstRender) {
             Icon(
                 Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
@@ -334,14 +339,15 @@ private fun RecordButton(
             )
         } else if (!enabled) {
             firstRender = false
-            Text(stringResource(R.string.transcribing), fontSize = textSize)
+            Text(stringResource(R.string.transcribing), fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                modifier = Modifier.basicMarquee())
         } else if (isRecording) {
             firstRender = false
             Icon(Icons.Outlined.Stop, stringResource(R.string.stop_recording),
                 modifier = Modifier.defaultMinSize(iconSize, iconSize))
             Text(
                 " %d:%02d".format(seconds / 60, seconds % 60),
-                fontSize = textSize
+                fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip
             )
         } else {
             Icon(
