@@ -103,7 +103,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         onClick = service::toggleRecord,
                         onCancel = service::cancelTranscription,
                         modifier = Modifier
-                            .weight(2f)
+                            .weight(3f)
                             .padding(btnPad),
                         shape = shape,
                     )
