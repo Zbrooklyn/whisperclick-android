@@ -23,11 +23,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Memory
@@ -38,7 +40,11 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -66,17 +72,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.nefeshcore.whisperclick.R
+import com.nefeshcore.whisperclick.api.ApiKeyValidator
 import com.nefeshcore.whisperclick.model.ModelManager
 import com.nefeshcore.whisperclick.utils.AppLog
 import kotlinx.coroutines.launch
@@ -429,49 +439,33 @@ private fun MainScreen(
                     )
                     // API Key
                     if (aiProvider == "gemini") {
-                        ListItem(
-                            headlineContent = { Text("Gemini API Key") },
-                            leadingContent = { Icon(Icons.Outlined.Key, null) },
-                            supportingContent = {
-                                OutlinedTextField(
-                                    value = geminiApiKey,
-                                    onValueChange = {
-                                        geminiApiKey = it
-                                        with(sharedPref.edit()) {
-                                            putString("gemini_api_key", it)
-                                            apply()
-                                        }
-                                    },
-                                    label = { Text("Enter Gemini API Key") },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
-                                )
-                            }
+                        ApiKeyField(
+                            label = "Gemini API Key",
+                            value = geminiApiKey,
+                            placeholder = "AIza...",
+                            onValueChange = {
+                                geminiApiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("gemini_api_key", it)
+                                    apply()
+                                }
+                            },
+                            onVerify = { ApiKeyValidator.validateGemini(it) }
                         )
                     }
                     if (aiProvider == "openai") {
-                        ListItem(
-                            headlineContent = { Text("OpenAI API Key") },
-                            leadingContent = { Icon(Icons.Outlined.Key, null) },
-                            supportingContent = {
-                                OutlinedTextField(
-                                    value = openaiApiKey,
-                                    onValueChange = {
-                                        openaiApiKey = it
-                                        with(sharedPref.edit()) {
-                                            putString("openai_api_key", it)
-                                            apply()
-                                        }
-                                    },
-                                    label = { Text("Enter OpenAI API Key") },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
-                                )
-                            }
+                        ApiKeyField(
+                            label = "OpenAI API Key",
+                            value = openaiApiKey,
+                            placeholder = "sk-...",
+                            onValueChange = {
+                                openaiApiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("openai_api_key", it)
+                                    apply()
+                                }
+                            },
+                            onVerify = { ApiKeyValidator.validateOpenAI(it) }
                         )
                     }
                     // Threads
@@ -712,15 +706,24 @@ private fun AppLogSection() {
 @Composable
 private fun InputMethodButton() {
     val context = LocalContext.current
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val isEnabled = imm.enabledInputMethodList.any { it.packageName == context.packageName }
     ListItem(
         headlineContent = { Text(stringResource(R.string.input_method_button)) },
         leadingContent = { Icon(Icons.Outlined.Keyboard, null) },
-        supportingContent = { Text(stringResource(R.string.input_method_description)) },
+        supportingContent = {
+            if (isEnabled) {
+                Text("Enabled", color = Color(0xFF4CAF50))
+            } else {
+                Text(stringResource(R.string.input_method_description))
+            }
+        },
         trailingContent = {
-            Icon(
-                Icons.AutoMirrored.Outlined.NavigateNext,
-                stringResource(R.string.input_method_button)
-            )
+            if (isEnabled) {
+                Icon(Icons.Outlined.CheckCircle, "Enabled", tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+            } else {
+                Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
+            }
         },
         modifier = Modifier.clickable(onClick = {
             context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
@@ -734,22 +737,24 @@ private fun PermissionButton() {
     val micPermissionState = rememberPermissionState(
         permission = android.Manifest.permission.RECORD_AUDIO
     )
+    val granted = micPermissionState.status.isGranted
     ListItem(
         headlineContent = { Text(stringResource(R.string.permission_button)) },
         leadingContent = { Icon(Icons.Outlined.Mic, null) },
         supportingContent = {
-            if (micPermissionState.status.isGranted) {
-                Text(stringResource(R.string.permission_granted))
+            if (granted) {
+                Text("Granted", color = Color(0xFF4CAF50))
             }
         },
         trailingContent = {
-            Icon(
-                Icons.AutoMirrored.Outlined.NavigateNext,
-                stringResource(R.string.input_method_button)
-            )
+            if (granted) {
+                Icon(Icons.Outlined.CheckCircle, "Granted", tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+            } else {
+                Icon(Icons.AutoMirrored.Outlined.NavigateNext, null)
+            }
         },
         modifier = Modifier.clickable(onClick = {
-            if (!micPermissionState.status.isGranted) {
+            if (!granted) {
                 micPermissionState.launchPermissionRequest()
             }
         })
@@ -821,6 +826,103 @@ private fun KeyboardPickerItem(sharedPref: android.content.SharedPreferences) {
             confirmButton = {}
         )
     }
+}
+
+// ── API Key field with validation ──
+
+@Composable
+private fun ApiKeyField(
+    label: String,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    onVerify: suspend (String) -> ApiKeyValidator.Result
+) {
+    var showKey by remember { mutableStateOf(false) }
+    var verifyState by remember { mutableStateOf<String?>(null) } // null=idle, ""=loading, "valid", "error:..."
+    val coroutineScope = rememberCoroutineScope()
+
+    ListItem(
+        headlineContent = { Text(label) },
+        leadingContent = {
+            val icon = when {
+                verifyState == "valid" -> Icons.Outlined.CheckCircle
+                verifyState?.startsWith("error") == true -> Icons.Outlined.Error
+                else -> Icons.Outlined.Key
+            }
+            val tint = when {
+                verifyState == "valid" -> Color(0xFF4CAF50)
+                verifyState?.startsWith("error") == true -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Icon(icon, null, tint = tint)
+        },
+        supportingContent = {
+            Column {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = {
+                        onValueChange(it)
+                        verifyState = null // reset on edit
+                    },
+                    placeholder = { Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                    label = { Text(label) },
+                    singleLine = true,
+                    visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showKey = !showKey }) {
+                            Icon(
+                                if (showKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                if (showKey) "Hide key" else "Show key",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Status text
+                    when {
+                        verifyState == "" -> Text("Verifying...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        verifyState == "valid" -> Text("Key verified", fontSize = 12.sp, color = Color(0xFF4CAF50))
+                        verifyState?.startsWith("error:") == true -> Text(
+                            verifyState!!.removePrefix("error:"),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        else -> Spacer(Modifier)
+                    }
+                    // Verify button
+                    TextButton(
+                        onClick = {
+                            verifyState = "" // loading
+                            coroutineScope.launch {
+                                val result = onVerify(value)
+                                verifyState = when (result) {
+                                    is ApiKeyValidator.Result.Valid -> "valid"
+                                    is ApiKeyValidator.Result.Invalid -> "error:${result.message}"
+                                }
+                            }
+                        },
+                        enabled = value.isNotBlank() && verifyState != "",
+                        contentPadding = ButtonDefaults.TextButtonContentPadding,
+                    ) {
+                        if (verifyState == "") {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text("Verify", fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    )
 }
 
 // ── Testing items ──
