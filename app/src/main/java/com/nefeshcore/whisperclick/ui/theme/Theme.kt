@@ -3,22 +3,34 @@ package com.nefeshcore.whisperclick.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 private val ColorScheme = darkColorScheme(
+    // Primary — record button, switches, sliders, active chips
     primary = Orange,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
-    primaryContainer = OrangeLight,
-    onPrimaryContainer = androidx.compose.ui.graphics.Color.White,
-    secondary = OnSurfaceVariant,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
-    secondaryContainer = SurfaceVariant,
+    onPrimary = Color.White,
+    primaryContainer = OrangeMuted,
+    onPrimaryContainer = OrangeLight,
+
+    // Secondary — tonal buttons (backspace, enter)
+    secondaryContainer = SurfaceBright,
     onSecondaryContainer = OnSurface,
+
+    // Surface — backgrounds, cards, list items
     surface = Surface,
-    onSurface = OnSurface,
+    surfaceDim = SurfaceDim,
     surfaceVariant = SurfaceVariant,
+    surfaceBright = SurfaceBright,
+    onSurface = OnSurface,
     onSurfaceVariant = OnSurfaceVariant,
+
+    // Outline — outlined buttons, dividers, text field borders
     outline = Outline,
     outlineVariant = Outline,
+
+    // TopAppBar, Scaffold background
+    background = SurfaceDim,
+    onBackground = OnSurface,
 )
 
 @Composable

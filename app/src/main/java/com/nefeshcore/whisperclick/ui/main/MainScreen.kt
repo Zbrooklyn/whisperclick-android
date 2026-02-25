@@ -32,12 +32,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,13 +125,20 @@ private fun MainScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = {
-                Text(
-                    stringResource(R.string.settings),
-                    fontSize = 30.sp, fontWeight = FontWeight.Bold
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(R.string.settings),
+                        fontSize = 28.sp, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
-            })
+            )
         },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.padding(innerPadding)
@@ -317,8 +328,10 @@ private fun MainScreen(
 private fun SectionHeader(header: String, tp: Dp = 16.dp, bp: Dp = 0.dp) {
     Text(
         header,
-        fontSize = 24.sp,
-        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = 0.5.sp,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = tp, bottom = bp, start = 16.dp, end = 0.dp)
@@ -336,7 +349,8 @@ private fun AppLogSection() {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Log", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Log", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
         Row {
             IconButton(onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -354,7 +368,8 @@ private fun AppLogSection() {
         Text(
             text = logText.ifEmpty { "(no log entries yet)" },
             fontSize = 12.sp,
-            lineHeight = 16.sp
+            lineHeight = 16.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
