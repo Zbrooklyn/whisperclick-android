@@ -103,9 +103,19 @@ private fun MainScreen(
         )
     }
     
-    var apiKey by remember {
+    var aiProvider by remember {
+        mutableStateOf(
+            sharedPref.getString("ai_provider", "gemini") ?: "gemini"
+        )
+    }
+    var geminiApiKey by remember {
         mutableStateOf(
             sharedPref.getString("gemini_api_key", "") ?: ""
+        )
+    }
+    var openaiApiKey by remember {
+        mutableStateOf(
+            sharedPref.getString("openai_api_key", "") ?: ""
         )
     }
 
@@ -129,27 +139,91 @@ private fun MainScreen(
             item { MoreButton() }
             item { SectionHeader(stringResource(R.string.advanced_header), bp = 4.dp) }
             
-            // API Key Input
+            // AI Provider Picker
             item {
                 ListItem(
-                    headlineContent = { Text("Gemini API Key") },
-                    leadingContent = { Icon(Icons.Outlined.Key, null) },
+                    headlineContent = { Text("AI Provider") },
+                    leadingContent = { Icon(Icons.Outlined.Star, null) },
                     supportingContent = {
-                        OutlinedTextField(
-                            value = apiKey,
-                            onValueChange = { 
-                                apiKey = it
-                                with(sharedPref.edit()) {
-                                    putString("gemini_api_key", it)
-                                    apply()
-                                }
-                            },
-                            label = { Text("Enter API Key") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.material3.FilterChip(
+                                selected = aiProvider == "gemini",
+                                onClick = {
+                                    aiProvider = "gemini"
+                                    with(sharedPref.edit()) {
+                                        putString("ai_provider", "gemini")
+                                        apply()
+                                    }
+                                },
+                                label = { Text("Gemini") }
+                            )
+                            androidx.compose.material3.FilterChip(
+                                selected = aiProvider == "openai",
+                                onClick = {
+                                    aiProvider = "openai"
+                                    with(sharedPref.edit()) {
+                                        putString("ai_provider", "openai")
+                                        apply()
+                                    }
+                                },
+                                label = { Text("OpenAI") }
+                            )
+                        }
                     }
                 )
+            }
+
+            // Gemini API Key
+            if (aiProvider == "gemini") {
+                item {
+                    ListItem(
+                        headlineContent = { Text("Gemini API Key") },
+                        leadingContent = { Icon(Icons.Outlined.Key, null) },
+                        supportingContent = {
+                            OutlinedTextField(
+                                value = geminiApiKey,
+                                onValueChange = {
+                                    geminiApiKey = it
+                                    with(sharedPref.edit()) {
+                                        putString("gemini_api_key", it)
+                                        apply()
+                                    }
+                                },
+                                label = { Text("Enter Gemini API Key") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            )
+                        }
+                    )
+                }
+            }
+
+            // OpenAI API Key
+            if (aiProvider == "openai") {
+                item {
+                    ListItem(
+                        headlineContent = { Text("OpenAI API Key") },
+                        leadingContent = { Icon(Icons.Outlined.Key, null) },
+                        supportingContent = {
+                            OutlinedTextField(
+                                value = openaiApiKey,
+                                onValueChange = {
+                                    openaiApiKey = it
+                                    with(sharedPref.edit()) {
+                                        putString("openai_api_key", it)
+                                        apply()
+                                    }
+                                },
+                                label = { Text("Enter OpenAI API Key") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            )
+                        }
+                    )
+                }
             }
 
             item {

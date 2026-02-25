@@ -125,19 +125,27 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         AppLog.log("Rewrite", "Input: ${textBefore.take(80)}${if (textBefore.length > 80) "..." else ""}")
 
         scope.launch {
-            val apiKey = sharedPref?.getString("gemini_api_key", "") ?: ""
+            val provider = sharedPref?.getString("ai_provider", "gemini") ?: "gemini"
+            val apiKeyPref = if (provider == "openai") "openai_api_key" else "gemini_api_key"
+            val apiKey = sharedPref?.getString(apiKeyPref, "") ?: ""
+            val client: com.nefeshcore.whisperclick.api.RewriteProvider = if (provider == "openai") {
+                com.nefeshcore.whisperclick.api.OpenAIClient
+            } else {
+                com.nefeshcore.whisperclick.api.GeminiClient
+            }
 
             if (apiKey.isEmpty()) {
-                AppLog.log("Rewrite", "ERROR: API Key not set")
+                val providerName = client.name
+                AppLog.log("Rewrite", "ERROR: $providerName API Key not set")
                 withContext(Dispatchers.Main) {
-                    ic.commitText("[Error: Set Gemini API Key in Settings]", 1)
+                    ic.commitText("[Error: Set $providerName API Key in Settings]", 1)
                 }
                 return@launch
             }
 
-            AppLog.log("Rewrite", "Calling Gemini API...")
+            AppLog.log("Rewrite", "Calling ${client.name} API...")
             val start = System.currentTimeMillis()
-            val rewritten = com.nefeshcore.whisperclick.api.GeminiClient.rewriteText(apiKey, textBefore, style)
+            val rewritten = client.rewriteText(apiKey, textBefore, style)
             val elapsed = System.currentTimeMillis() - start
 
             if (rewritten.isNotEmpty() && rewritten != textBefore) {
