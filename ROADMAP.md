@@ -67,11 +67,12 @@ no clipboard history, no auto-switch-back keyboard.
 | 4 | **Voice Activity Detection (VAD)** — Auto-start/stop recording when user speaks/pauses | HIGH | Silero VAD is lightweight (~2MB). Eliminates manual start/stop |
 | 5 | **Last-used keyboard auto-switch** — Track which keyboard user switched FROM and auto-switch back to it. Uses ContentObserver on `Settings.Secure.DEFAULT_INPUT_METHOD` to record previous IME. Falls back to preferred keyboard setting if no history | HIGH | Better UX than cycling through all keyboards |
 | 6 | **Clipboard history** — Build our own clipboard history using `ClipboardManager.addPrimaryClipChangedListener()`. Captures copies from any app. Button on keyboard opens recent clips for quick paste. Stored locally, auto-prune old entries | HIGH | System clipboard listener is app-agnostic — works regardless of which keyboard copied the text. Cannot sync with Samsung/Gboard proprietary history but captures the same content independently |
-| 7 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
-| 8 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
-| 9 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
-| 10 | **Custom rewrite prompts** — User-defined 6th card in the rewrite carousel. TextField where user types their own instruction (e.g. "Rewrite as if explaining to a 5-year-old"). Separate API call since it's user-defined. Saved styles persist in SharedPreferences | LOW | Builds on top of the swipe-right rewrite panel |
-| 11 | **Rewrite undo** — One-tap revert after applying a rewrite. Stores original text so user can undo if the result isn't right | LOW | Simple: save original in a variable before replacing |
+| 7 | **Cloud STT: Gemini support** — Add Gemini as a cloud STT provider alongside OpenAI. Users pick one cloud provider for both STT and rewrite — no separate API keys needed. Gemini's multimodal API accepts audio directly. STT mode becomes: Local Whisper / Cloud (uses whichever AI provider is selected in Magic Rewrite). One API key per provider handles everything | HIGH | Currently cloud STT is OpenAI-only. Unifying provider selection means users with a Gemini key get both rewrite and cloud STT without needing an OpenAI key, and vice versa |
+| 8 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
+| 9 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
+| 10 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
+| 11 | **Custom rewrite prompts** — User-defined 6th card in the rewrite carousel. TextField where user types their own instruction (e.g. "Rewrite as if explaining to a 5-year-old"). Separate API call since it's user-defined. Saved styles persist in SharedPreferences | LOW | Builds on top of the swipe-right rewrite panel |
+| 12 | **Rewrite undo** — One-tap revert after applying a rewrite. Stores original text so user can undo if the result isn't right | LOW | Simple: save original in a variable before replacing |
 
 ---
 
