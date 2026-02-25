@@ -44,7 +44,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nefeshcore.whisperclick.ui.MagicMenu
 import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -60,27 +59,13 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
 
     @Composable
     override fun Content() {
-        var showMagicMenu by remember { mutableStateOf(false) }
         var showEditRow by remember { mutableStateOf(false) }
-
-        if (showMagicMenu) {
-            MagicMenu(
-                onDismiss = { showMagicMenu = false },
-                onOptionSelected = { style ->
-                    showMagicMenu = false
-                    service.performRewrite(style)
-                }
-            )
-        }
 
         KaiboardTheme {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // Row 2: Editing toolbar (toggled by long-press ⌨)
                 if (showEditRow) {
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        EditButton(onClick = { showMagicMenu = true }) {
-                            Icon(painterResource(R.drawable.ic_magic_sparkle), "Magic")
-                        }
                         EditButton(onClick = { service.performEditAction(android.R.id.selectAll) }) {
                             Icon(Icons.Outlined.SelectAll, "Select All")
                         }
