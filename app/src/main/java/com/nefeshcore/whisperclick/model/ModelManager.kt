@@ -28,14 +28,15 @@ data class DownloadProgress(
 object ModelManager {
     private const val HF_BASE = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
 
+    // Q5_1 quantized models — 60% smaller, faster inference, near-identical accuracy
     val availableModels = listOf(
-        WhisperModel("Tiny English", "ggml-tiny.en.bin", "$HF_BASE/ggml-tiny.en.bin", 75, "Tiny"),
-        WhisperModel("Base English", "ggml-base.en.bin", "$HF_BASE/ggml-base.en.bin", 142, "Base"),
-        WhisperModel("Small English", "ggml-small.en.bin", "$HF_BASE/ggml-small.en.bin", 466, "Small"),
-        WhisperModel("Medium English", "ggml-medium.en.bin", "$HF_BASE/ggml-medium.en.bin", 1500, "Medium"),
-        WhisperModel("Tiny Multilingual", "ggml-tiny.bin", "$HF_BASE/ggml-tiny.bin", 75, "Tiny"),
-        WhisperModel("Base Multilingual", "ggml-base.bin", "$HF_BASE/ggml-base.bin", 142, "Base"),
-        WhisperModel("Small Multilingual", "ggml-small.bin", "$HF_BASE/ggml-small.bin", 466, "Small"),
+        WhisperModel("Tiny English (Q5)", "ggml-tiny.en-q5_1.bin", "$HF_BASE/ggml-tiny.en-q5_1.bin", 31, "Tiny"),
+        WhisperModel("Base English (Q5)", "ggml-base.en-q5_1.bin", "$HF_BASE/ggml-base.en-q5_1.bin", 57, "Base"),
+        WhisperModel("Small English (Q5)", "ggml-small.en-q5_1.bin", "$HF_BASE/ggml-small.en-q5_1.bin", 181, "Small"),
+        WhisperModel("Medium English (Q5)", "ggml-medium.en-q5_1.bin", "$HF_BASE/ggml-medium.en-q5_1.bin", 514, "Medium"),
+        WhisperModel("Tiny Multilingual (Q5)", "ggml-tiny-q5_1.bin", "$HF_BASE/ggml-tiny-q5_1.bin", 31, "Tiny"),
+        WhisperModel("Base Multilingual (Q5)", "ggml-base-q5_1.bin", "$HF_BASE/ggml-base-q5_1.bin", 57, "Base"),
+        WhisperModel("Small Multilingual (Q5)", "ggml-small-q5_1.bin", "$HF_BASE/ggml-small-q5_1.bin", 181, "Small"),
     )
 
     private val _progress = MutableStateFlow(DownloadProgress())
