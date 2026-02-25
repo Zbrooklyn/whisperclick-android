@@ -6,6 +6,10 @@ import android.inputmethodservice.InputMethodService
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -60,8 +64,37 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         ).setAcceptsDelayedFocusGain(false).setOnAudioFocusChangeListener(focusChangeListener)
             .build()
 
+    private var currentEditorInfo: EditorInfo? = null
+
     override fun onStartInputView(editorInfo: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(editorInfo, restarting)
+        currentEditorInfo = editorInfo
+        // Reload model if it was released when keyboard was hidden
+        if (whisperContext == null && !isModelLoading) {
+            isModelLoading = true
+            scope.launch {
+                try {
+                    loadBaseModel()
+                    canTranscribe = true
+                } catch (e: Exception) {
+                    Log.w(LOG_TAG, "Failed to reload model", e)
+                }
+                isModelLoading = false
+            }
+        }
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        super.onFinishInputView(finishingInput)
+        // Unload model from RAM when keyboard is hidden
+        if (!isRecording && !isTranscribing) {
+            scope.launch {
+                whisperContext?.release()
+                whisperContext = null
+                canTranscribe = false
+                AppLog.log("Keyboard", "Model unloaded (keyboard hidden)")
+            }
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -174,6 +207,9 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         private set
     @Volatile
     private var transcriptionCancelled = false
+    private var isModelLoading = false
+    private val useCloudStt: Boolean
+        get() = sharedPref?.getString("stt_mode", "local") == "cloud"
     private var modelsPath: File? = null
     private var samplesPath: File? = null
     private var sharedPref: SharedPreferences? = null
@@ -216,17 +252,28 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
     private suspend fun loadBaseModel() = withContext(Dispatchers.IO) {
         printMessage("Loading model...\n")
-        val models = application.assets.list("models/")
-        if (models != null) {
-            whisperContext =
-                WhisperContext.createContextFromAsset(application.assets, "models/" + models[0])
-            printMessage("Loaded model ${models[0]}.\n")
+        val activeModel = sharedPref?.getString("active_model", "") ?: ""
+        val modelsDir = File(application.filesDir, "models")
+
+        // Try active model from downloads first
+        if (activeModel.isNotEmpty()) {
+            val downloadedFile = File(modelsDir, activeModel)
+            if (downloadedFile.exists()) {
+                whisperContext = WhisperContext.createContextFromFile(downloadedFile.absolutePath)
+                printMessage("Loaded model $activeModel.\n")
+                return@withContext
+            }
+        }
+
+        // Fall back to bundled asset models
+        val assetModels = application.assets.list("models/")
+        if (assetModels != null && assetModels.isNotEmpty()) {
+            val modelName = if (activeModel.isNotEmpty() && activeModel in assetModels) activeModel else assetModels[0]
+            whisperContext = WhisperContext.createContextFromAsset(application.assets, "models/$modelName")
+            printMessage("Loaded model $modelName.\n")
         } else {
             throw Exception("no models found")
         }
-
-        //val firstModel = modelsPath.listFiles()!!.first()
-        //whisperContext = WhisperContext.createContextFromFile(firstModel.absolutePath)
     }
 
     private suspend fun transcribe(samples: ShortArray): String? {
@@ -286,12 +333,12 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 val samples = recorder.stopRecording()
                 isRecording = false
 
-                if (samples.isNotEmpty() && canTranscribe) {
+                if (samples.isNotEmpty() && (canTranscribe || useCloudStt)) {
                     canTranscribe = false
                     isTranscribing = true
                     transcriptionCancelled = false
                     currentInputConnection.setComposingText("Transcribing...", 1)
-                    val text = transcribe(samples)
+                    val text = if (useCloudStt) transcribeCloud(samples) else transcribe(samples)
                     isTranscribing = false
                     if (transcriptionCancelled) {
                         AppLog.log("Keyboard", "Transcription cancelled")
@@ -335,8 +382,20 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         }
     }
 
+    // Haptic feedback
+    fun haptic() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
+
     // for keys — supports optional meta keys (e.g. CTRL for undo)
     fun sendKeyPress(key: Int, meta: Int = 0) {
+        haptic()
         currentInputConnection.sendKeyEvent(
             KeyEvent(0, 0, KeyEvent.ACTION_DOWN, key, 0, meta)
         )
@@ -345,7 +404,23 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         )
     }
 
+    // Enter key that respects imeOptions (Send, Search, Go, Next, Done)
+    fun sendEnter() {
+        haptic()
+        val ei = currentEditorInfo
+        val ic = currentInputConnection ?: return
+        if (ei != null) {
+            val action = ei.imeOptions and EditorInfo.IME_MASK_ACTION
+            if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                ic.performEditorAction(action)
+                return
+            }
+        }
+        sendKeyPress(KeyEvent.KEYCODE_ENTER)
+    }
+
     fun performEditAction(actionId: Int) {
+        haptic()
         currentInputConnection?.performContextMenuAction(actionId)
     }
 
@@ -354,12 +429,34 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun switchKeyboard() {
+        haptic()
         val preferredIme = sharedPref?.getString("preferred_keyboard", "") ?: ""
         if (preferredIme.isNotEmpty()) {
             switchInputMethod(preferredIme)
         } else {
             switchToNextInputMethod(false)
         }
+    }
+
+    // Cloud STT via OpenAI Whisper API
+    private suspend fun transcribeCloud(samples: ShortArray): String? {
+        if (samples.isEmpty()) return null
+        val apiKey = sharedPref?.getString("openai_api_key", "") ?: ""
+        if (apiKey.isEmpty()) {
+            printMessage("Cloud STT requires OpenAI API key\n")
+            return null
+        }
+        val durationMs = samples.size / (16000 / 1000)
+        printMessage("Cloud transcribing ${durationMs}ms...\n")
+        val start = System.currentTimeMillis()
+        val result = com.nefeshcore.whisperclick.api.WhisperCloudClient.transcribe(apiKey, samples)
+        val elapsed = System.currentTimeMillis() - start
+        if (result != null) {
+            printMessage("Cloud done (${elapsed}ms): $result\n")
+        } else {
+            printMessage("Cloud STT failed\n")
+        }
+        return result
     }
 }
 

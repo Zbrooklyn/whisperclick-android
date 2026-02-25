@@ -9,6 +9,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,8 +17,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Memory
@@ -61,8 +65,13 @@ import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
 import com.nefeshcore.whisperclick.R
+import com.nefeshcore.whisperclick.model.ModelManager
 import com.nefeshcore.whisperclick.utils.AppLog
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel) {
@@ -84,7 +93,8 @@ private fun MainScreen(
     onBenchmarkTapped: () -> Unit,
     onRecordTapped: () -> Unit
 ) {
-    val sharedPref = LocalContext.current.getSharedPreferences(
+    val context = LocalContext.current
+    val sharedPref = context.getSharedPreferences(
         stringResource(R.string.preference_file_key), Context.MODE_PRIVATE
     )
     val maxThreads = Runtime.getRuntime().availableProcessors()
@@ -122,6 +132,18 @@ private fun MainScreen(
             sharedPref.getString("openai_api_key", "") ?: ""
         )
     }
+    var sttMode by remember {
+        mutableStateOf(sharedPref.getString("stt_mode", "local") ?: "local")
+    }
+    var themeMode by remember {
+        mutableStateOf(sharedPref.getString("theme_mode", "dark") ?: "dark")
+    }
+    val coroutineScope = rememberCoroutineScope()
+    val downloadProgress by ModelManager.progress.collectAsState()
+    var downloadedModels by remember { mutableStateOf(ModelManager.getDownloadedModels(context)) }
+    val bundledModels = remember { ModelManager.getBundledModels(context) }
+    var activeModel by remember { mutableStateOf(ModelManager.getActiveModelName(context)) }
+    var showModelDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -311,6 +333,169 @@ private fun MainScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            // STT Mode
+            item { SectionHeader("Speech-to-Text", bp = 4.dp) }
+            item {
+                ListItem(
+                    headlineContent = { Text("STT Mode") },
+                    leadingContent = { Icon(Icons.Outlined.Cloud, null) },
+                    supportingContent = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.material3.FilterChip(
+                                selected = sttMode == "local",
+                                onClick = {
+                                    sttMode = "local"
+                                    with(sharedPref.edit()) { putString("stt_mode", "local"); apply() }
+                                },
+                                label = { Text("Local Whisper") }
+                            )
+                            androidx.compose.material3.FilterChip(
+                                selected = sttMode == "cloud",
+                                onClick = {
+                                    sttMode = "cloud"
+                                    with(sharedPref.edit()) { putString("stt_mode", "cloud"); apply() }
+                                },
+                                label = { Text("Cloud (OpenAI)") }
+                            )
+                        }
+                    }
+                )
+            }
+
+            // Model Management
+            item { SectionHeader("Models", bp = 4.dp) }
+            item {
+                val allModels = bundledModels + downloadedModels.filter { it !in bundledModels }
+                val activeLabel = if (activeModel.isEmpty()) "Default (bundled)" else activeModel
+                ListItem(
+                    headlineContent = { Text("Active Model") },
+                    leadingContent = { Icon(Icons.Outlined.Memory, null) },
+                    supportingContent = { Text(activeLabel) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Outlined.NavigateNext, null) },
+                    modifier = Modifier.clickable { showModelDialog = true }
+                )
+
+                if (showModelDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showModelDialog = false },
+                        title = { Text("Select Model") },
+                        text = {
+                            androidx.compose.foundation.lazy.LazyColumn {
+                                item {
+                                    ListItem(
+                                        headlineContent = { Text("Default (bundled)") },
+                                        modifier = Modifier.clickable {
+                                            activeModel = ""
+                                            ModelManager.setActiveModel(context, "")
+                                            showModelDialog = false
+                                        }
+                                    )
+                                }
+                                items(allModels.size) { i ->
+                                    val name = allModels[i]
+                                    ListItem(
+                                        headlineContent = { Text(name) },
+                                        supportingContent = {
+                                            Text(if (name in bundledModels) "Bundled" else "Downloaded")
+                                        },
+                                        modifier = Modifier.clickable {
+                                            activeModel = name
+                                            ModelManager.setActiveModel(context, name)
+                                            showModelDialog = false
+                                        }
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {}
+                    )
+                }
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("Download Models") },
+                    leadingContent = { Icon(Icons.Outlined.Download, null) },
+                    supportingContent = {
+                        Column {
+                            if (downloadProgress.isDownloading) {
+                                val model = downloadProgress.model
+                                Text("Downloading ${model?.name ?: ""}...")
+                                if (downloadProgress.totalBytes > 0) {
+                                    LinearProgressIndicator(
+                                        progress = downloadProgress.bytesDownloaded.toFloat() / downloadProgress.totalBytes.toFloat(),
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                    )
+                                    Text(
+                                        "${downloadProgress.bytesDownloaded / 1024 / 1024}MB / ${downloadProgress.totalBytes / 1024 / 1024}MB",
+                                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                TextButton(onClick = { ModelManager.cancelDownload() }) {
+                                    Text("Cancel")
+                                }
+                            } else {
+                                ModelManager.availableModels.forEach { model ->
+                                    val isDownloaded = model.fileName in downloadedModels || model.fileName in bundledModels
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(model.name, fontSize = 14.sp)
+                                            Text("${model.sizeMb}MB · ${model.tier}",
+                                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        if (isDownloaded) {
+                                            Text("✓", color = MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            TextButton(onClick = {
+                                                coroutineScope.launch {
+                                                    val ok = ModelManager.downloadModel(context, model)
+                                                    if (ok) downloadedModels = ModelManager.getDownloadedModels(context)
+                                                }
+                                            }) {
+                                                Text("Get")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            // Theme
+            item { SectionHeader("Appearance", bp = 4.dp) }
+            item {
+                ListItem(
+                    headlineContent = { Text("Theme") },
+                    leadingContent = { Icon(Icons.Outlined.DarkMode, null) },
+                    supportingContent = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("light" to "Light", "dark" to "Dark", "oled" to "OLED").forEach { (key, label) ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = themeMode == key,
+                                    onClick = {
+                                        themeMode = key
+                                        with(sharedPref.edit()) { putString("theme_mode", key); apply() }
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+
+            item { SectionHeader("Testing", bp = 4.dp) }
             item {
                 BenchmarkButton(enabled = canTranscribe, onClick = onBenchmarkTapped)
             }

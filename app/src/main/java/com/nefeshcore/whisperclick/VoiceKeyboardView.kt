@@ -71,7 +71,11 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
     override fun Content() {
         var showEditRow by remember { mutableStateOf(false) }
 
-        KaiboardTheme {
+        val prefs = service.getSharedPreferences(
+            service.getString(R.string.preference_file_key), android.content.Context.MODE_PRIVATE
+        )
+        val themeMode = prefs.getString("theme_mode", "dark") ?: "dark"
+        KaiboardTheme(themeMode = themeMode) {
             Column(modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
@@ -125,7 +129,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         )
                     }
                     FilledTonalButton(
-                        onClick = { service.sendKeyPress(KeyEvent.KEYCODE_ENTER) },
+                        onClick = { service.sendEnter() },
                         modifier = Modifier
                             .weight(1f)
                             .padding(btnPad),
