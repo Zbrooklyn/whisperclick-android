@@ -104,7 +104,6 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         onCancel = service::cancelTranscription,
                         modifier = Modifier
                             .weight(2f)
-                            .height(56.dp)
                             .padding(btnPad),
                         shape = shape,
                     )
