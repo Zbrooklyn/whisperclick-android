@@ -132,7 +132,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                             stringResource(R.string.delete_button)
                         )
                     }
-                    FilledTonalButton(
+                    Button(
                         onClick = { service.sendEnter() },
                         modifier = Modifier
                             .weight(1.5f)
