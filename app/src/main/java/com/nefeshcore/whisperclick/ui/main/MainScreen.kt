@@ -184,7 +184,7 @@ private fun MainScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "v1.1",
+                                "v0.9.0-beta",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -596,7 +596,7 @@ private fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "WhisperClick v1.1",
+                        "WhisperClick v0.9.0-beta",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
