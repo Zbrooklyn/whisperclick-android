@@ -77,8 +77,11 @@ private class AudioRecordThread(
                     } else {
                         throw java.lang.RuntimeException("audioRecord.read returned $read")
                     }
-                    // run transcription callback
-                    transcriptionCallback(allData.toShortArray())
+                    // run transcription callback with at most last 30s of audio
+                    // to prevent O(n²) slowdown on longer recordings
+                    val maxSamples = 16000 * 30
+                    val start = if (allData.size > maxSamples) allData.size - maxSamples else 0
+                    transcriptionCallback(allData.subList(start, allData.size).toShortArray())
                 }
 
                 audioRecord.stop()

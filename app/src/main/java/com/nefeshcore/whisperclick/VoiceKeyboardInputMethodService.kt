@@ -179,6 +179,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     private val maxThreads = Runtime.getRuntime().availableProcessors()
     private var currentJob: Job? = null
     private var trailing: String? = null
+    private var lastTranscribedText: String? = null
 
     private fun checkBoolPref(resource: Int): Boolean? {
         return sharedPref?.getBoolean(
@@ -273,7 +274,8 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
             // add text only if non-empty
             // avoids adding just a single space for empty messages
             if (text?.length!! > 0) {
-                currentInputConnection.setComposingText(text + (trailing ?: ""), 1)
+                lastTranscribedText = text + (trailing ?: "")
+                currentInputConnection.setComposingText(lastTranscribedText, 1)
             }
             val elapsed = System.currentTimeMillis() - start
             printMessage("Done ($elapsed ms): \n$text\n")
@@ -295,6 +297,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 currentInputConnection.finishComposingText()
                 recorder.stopRecording()
                 isRecording = false
+                lastTranscribedText = null
             }
         } catch (e: Exception) {
             Log.w(LOG_TAG, e)
@@ -332,10 +335,27 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 if (checkBoolPref(R.string.pause_media) == true) {
                     focusRequest.let { audioManager.abandonAudioFocusRequest(it) }
                 }
-                currentJob?.cancel()
                 recorder.stopRecording()
                 isRecording = false
-                recordedFile?.let { transcribeFile(it) }
+                val pendingJob = currentJob
+                if (pendingJob != null) {
+                    // Wait for in-flight live transcription to finish instead of
+                    // canceling and re-transcribing from scratch
+                    AppLog.log("Keyboard", "Waiting for live transcription to finish...")
+                    pendingJob.join()
+                    currentJob = null
+                    currentInputConnection.finishComposingText()
+                    AppLog.log("Keyboard", "Text finalized from live transcription")
+                } else if (lastTranscribedText != null) {
+                    // Last live transcription already completed — just finalize
+                    currentInputConnection.finishComposingText()
+                    AppLog.log("Keyboard", "Text finalized from cached result")
+                } else {
+                    // No live transcription result — transcribe the recorded file
+                    AppLog.log("Keyboard", "No live result, transcribing file...")
+                    recordedFile?.let { transcribeFile(it) }
+                }
+                lastTranscribedText = null
             } else {
                 if (checkBoolPref(R.string.pause_media) == true) {
                     // Request focus
@@ -347,6 +367,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                     }
                 }
                 trailing = null
+                lastTranscribedText = null
                 val file = getTempFileForRecording()
                 recorder.startRecording(file, onError, transcriptionCallback)
                 AppLog.log("Keyboard", "Recording started")
