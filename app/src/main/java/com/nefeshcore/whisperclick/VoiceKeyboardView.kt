@@ -71,34 +71,6 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
 
         KaiboardTheme {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Row 2: Editing toolbar (toggled by long-press ⌨)
-                if (showEditRow) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        EditButton(onClick = { service.performEditAction(android.R.id.selectAll) }) {
-                            Icon(Icons.Outlined.SelectAll, "Select All")
-                        }
-                        EditButton(onClick = { service.performEditAction(android.R.id.copy) }) {
-                            Icon(Icons.Outlined.ContentCopy, "Copy")
-                        }
-                        EditButton(onClick = { service.performEditAction(android.R.id.paste) }) {
-                            Icon(Icons.Outlined.ContentPaste, "Paste")
-                        }
-                        EditButton(onClick = {
-                            service.sendKeyPress(KeyEvent.KEYCODE_Z, KeyEvent.META_CTRL_ON)
-                        }) {
-                            Icon(Icons.Outlined.Undo, "Undo")
-                        }
-                        EditButton(onClick = {
-                            service.sendKeyPress(
-                                KeyEvent.KEYCODE_Z,
-                                KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
-                            )
-                        }) {
-                            Icon(Icons.Outlined.Redo, "Redo")
-                        }
-                    }
-                }
-
                 // Row 1: Main keyboard bar
                 Row(modifier = Modifier.fillMaxWidth()) {
                     RecordButton(
@@ -178,6 +150,34 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                             painterResource(R.drawable.keyboard_previous_language),
                             stringResource(R.string.switch_keyboard_button)
                         )
+                    }
+                }
+
+                // Row 2: Editing toolbar (toggled by long-press ⌨)
+                if (showEditRow) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        EditButton(onClick = { service.performEditAction(android.R.id.selectAll) }) {
+                            Icon(Icons.Outlined.SelectAll, "Select All")
+                        }
+                        EditButton(onClick = { service.performEditAction(android.R.id.copy) }) {
+                            Icon(Icons.Outlined.ContentCopy, "Copy")
+                        }
+                        EditButton(onClick = { service.performEditAction(android.R.id.paste) }) {
+                            Icon(Icons.Outlined.ContentPaste, "Paste")
+                        }
+                        EditButton(onClick = {
+                            service.sendKeyPress(KeyEvent.KEYCODE_Z, KeyEvent.META_CTRL_ON)
+                        }) {
+                            Icon(Icons.Outlined.Undo, "Undo")
+                        }
+                        EditButton(onClick = {
+                            service.sendKeyPress(
+                                KeyEvent.KEYCODE_Z,
+                                KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
+                            )
+                        }) {
+                            Icon(Icons.Outlined.Redo, "Redo")
+                        }
                     }
                 }
             }
