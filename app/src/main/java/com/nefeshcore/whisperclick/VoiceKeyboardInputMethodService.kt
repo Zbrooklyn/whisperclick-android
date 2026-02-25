@@ -320,10 +320,18 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         }
     }
 
-    // for del and newline buttons
-    fun sendKeyPress(key: Int) {
-        currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
-        currentInputConnection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+    // for keys — supports optional meta keys (e.g. CTRL for undo)
+    fun sendKeyPress(key: Int, meta: Int = 0) {
+        currentInputConnection.sendKeyEvent(
+            KeyEvent(0, 0, KeyEvent.ACTION_DOWN, key, 0, meta)
+        )
+        currentInputConnection.sendKeyEvent(
+            KeyEvent(0, 0, KeyEvent.ACTION_UP, key, 0, meta)
+        )
+    }
+
+    fun performEditAction(actionId: Int) {
+        currentInputConnection?.performContextMenuAction(actionId)
     }
 
     fun shouldRenderSwitcher(): Boolean {

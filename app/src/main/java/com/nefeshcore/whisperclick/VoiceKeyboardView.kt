@@ -6,17 +6,26 @@ import android.os.Looper
 import android.view.KeyEvent
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.KeyboardVoice
+import androidx.compose.material.icons.outlined.Redo
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -37,20 +46,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nefeshcore.whisperclick.ui.MagicMenu
 import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
 
 @SuppressLint("ViewConstructor")
 class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
     AbstractComposeView(service) {
-    private val padding = 2.dp
+    private val btnPad = 2.dp
     private val minSize = 12.dp
-    private val contentPad = 12.dp
+    private val contentPad = PaddingValues(horizontal = 12.dp)
     private val shape = RoundedCornerShape(size = 8.dp)
 
     @Composable
     override fun Content() {
         var showMagicMenu by remember { mutableStateOf(false) }
+        var showEditRow by remember { mutableStateOf(false) }
 
         if (showMagicMenu) {
             MagicMenu(
@@ -63,75 +74,109 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
         }
 
         KaiboardTheme {
-            Row {
-                RecordButton(
-                    enabled = service.canTranscribe,
-                    isRecording = service.isRecording,
-                    onClick = service::toggleRecord,
-                    modifier = Modifier
-                        .weight(1f, true)
-                        .padding(padding),
-                    shape = shape,
-                )
-                
-                // Magic Rewrite Button
-                if (!service.isRecording) {
-                    Button(
-                        onClick = { showMagicMenu = true },
-                        modifier = Modifier
-                            .padding(padding)
-                            .defaultMinSize(minWidth = minSize),
-                        shape = shape,
-                        contentPadding = PaddingValues(horizontal = contentPad),
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.ic_magic_sparkle),
-                            "Magic Rewrite"
-                        )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Row 2: Editing toolbar (toggled by long-press ⌨)
+                if (showEditRow) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        EditButton(onClick = { showMagicMenu = true }) {
+                            Icon(painterResource(R.drawable.ic_magic_sparkle), "Magic")
+                        }
+                        EditButton(onClick = { service.performEditAction(android.R.id.selectAll) }) {
+                            Icon(Icons.Outlined.SelectAll, "Select All")
+                        }
+                        EditButton(onClick = { service.performEditAction(android.R.id.copy) }) {
+                            Icon(Icons.Outlined.ContentCopy, "Copy")
+                        }
+                        EditButton(onClick = { service.performEditAction(android.R.id.paste) }) {
+                            Icon(Icons.Outlined.ContentPaste, "Paste")
+                        }
+                        EditButton(onClick = {
+                            service.sendKeyPress(KeyEvent.KEYCODE_Z, KeyEvent.META_CTRL_ON)
+                        }) {
+                            Icon(Icons.Outlined.Undo, "Undo")
+                        }
+                        EditButton(onClick = {
+                            service.sendKeyPress(
+                                KeyEvent.KEYCODE_Z,
+                                KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
+                            )
+                        }) {
+                            Icon(Icons.Outlined.Redo, "Redo")
+                        }
                     }
                 }
 
-                if (service.isRecording) {
-                    CancelButton(
-                        onClick = service::cancelRecord,
+                // Row 1: Main keyboard bar
+                Row {
+                    RecordButton(
+                        enabled = service.canTranscribe,
+                        isRecording = service.isRecording,
+                        onClick = service::toggleRecord,
                         modifier = Modifier
-                            .padding(padding)
+                            .weight(1f, true)
+                            .padding(btnPad),
+                        shape = shape,
+                    )
+                    RepeatKeyButton(
+                        onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DPAD_LEFT) },
+                        modifier = Modifier
+                            .padding(btnPad)
                             .defaultMinSize(minWidth = minSize),
                         shape = shape,
-                        contentPadding = PaddingValues(horizontal = contentPad),
-                    )
-                }
-                DeleteButton(
-                    onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DEL) },
-                    modifier = Modifier
-                        .padding(padding)
-                        .defaultMinSize(minWidth = minSize),
-                    shape = shape,
-                    contentPadding = PaddingValues(horizontal = contentPad),
-                )
-                Button(
-                    onClick = {
-                        service.sendKeyPress(KeyEvent.KEYCODE_ENTER)
-                    },
-                    modifier = Modifier
-                        .padding(padding)
-                        .defaultMinSize(minWidth = minSize),
-                    shape = shape,
-                    contentPadding = PaddingValues(horizontal = contentPad),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.KeyboardReturn,
-                        stringResource(R.string.return_button)
-                    )
-                }
-                if (service.shouldRenderSwitcher()) {
-                    Button(
-                        onClick = { service.switchKeyboard() },
+                        contentPadding = contentPad,
+                    ) {
+                        Icon(Icons.Outlined.KeyboardArrowLeft, "Left")
+                    }
+                    RepeatKeyButton(
+                        onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DPAD_RIGHT) },
                         modifier = Modifier
-                            .padding(padding)
+                            .padding(btnPad)
                             .defaultMinSize(minWidth = minSize),
-                        contentPadding = PaddingValues(horizontal = contentPad),
-                        shape = shape
+                        shape = shape,
+                        contentPadding = contentPad,
+                    ) {
+                        Icon(Icons.Outlined.KeyboardArrowRight, "Right")
+                    }
+                    RepeatKeyButton(
+                        onClick = { service.sendKeyPress(KeyEvent.KEYCODE_DEL) },
+                        modifier = Modifier
+                            .padding(btnPad)
+                            .defaultMinSize(minWidth = minSize),
+                        shape = shape,
+                        contentPadding = contentPad,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Backspace,
+                            stringResource(R.string.delete_button)
+                        )
+                    }
+                    Button(
+                        onClick = { service.sendKeyPress(KeyEvent.KEYCODE_ENTER) },
+                        modifier = Modifier
+                            .padding(btnPad)
+                            .defaultMinSize(minWidth = minSize),
+                        shape = shape,
+                        contentPadding = contentPad,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.KeyboardReturn,
+                            stringResource(R.string.return_button)
+                        )
+                    }
+                    LongPressButton(
+                        onTap = {
+                            if (service.shouldRenderSwitcher()) {
+                                service.switchKeyboard()
+                            } else {
+                                showEditRow = !showEditRow
+                            }
+                        },
+                        onLongPress = { showEditRow = !showEditRow },
+                        modifier = Modifier
+                            .padding(btnPad)
+                            .defaultMinSize(minWidth = minSize),
+                        shape = shape,
+                        contentPadding = contentPad,
                     ) {
                         Icon(
                             painterResource(R.drawable.keyboard_previous_language),
@@ -144,24 +189,39 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
     }
 }
 
+// --- Reusable composables ---
+
 @Composable
-private fun CancelButton(
-    onClick: () -> Unit, modifier: Modifier, shape: Shape, contentPadding: PaddingValues,
+private fun RowScope.EditButton(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
 ) {
-    Button(onClick = onClick, modifier = modifier, shape = shape, contentPadding = contentPadding) {
-        Icon(Icons.Outlined.Clear, stringResource(R.string.cancel_recording))
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .weight(1f)
+            .padding(2.dp),
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+    ) {
+        content()
     }
 }
 
 @Composable
-private fun DeleteButton(
-    onClick: () -> Unit, modifier: Modifier, shape: Shape, contentPadding: PaddingValues
+private fun RepeatKeyButton(
+    onClick: () -> Unit,
+    modifier: Modifier,
+    shape: Shape,
+    contentPadding: PaddingValues,
+    repeatDelayMs: Long = 50,
+    content: @Composable () -> Unit
 ) {
     var mHandler: Handler? = null
     val mAction: Runnable = object : Runnable {
         override fun run() {
             onClick()
-            mHandler!!.postDelayed(this, 50)
+            mHandler!!.postDelayed(this, repeatDelayMs)
         }
     }
 
@@ -190,17 +250,58 @@ private fun DeleteButton(
         shape = shape,
         contentPadding = contentPadding
     ) {
-        Icon(Icons.AutoMirrored.Outlined.Backspace, stringResource(R.string.delete_button))
+        content()
+    }
+}
+
+@Composable
+private fun LongPressButton(
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier,
+    shape: Shape,
+    contentPadding: PaddingValues,
+    longPressMs: Long = 500,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    var longPressTriggered by remember { mutableStateOf(false) }
+
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collectLatest { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> {
+                    longPressTriggered = false
+                    delay(longPressMs)
+                    longPressTriggered = true
+                    onLongPress()
+                }
+
+                is PressInteraction.Release -> {}
+            }
+        }
+    }
+
+    Button(
+        onClick = { if (!longPressTriggered) onTap() },
+        interactionSource = interactionSource,
+        modifier = modifier,
+        shape = shape,
+        contentPadding = contentPadding,
+    ) {
+        content()
     }
 }
 
 @Composable
 private fun RecordButton(
-    enabled: Boolean, isRecording: Boolean, onClick: () -> Unit, modifier: Modifier, shape: Shape
+    enabled: Boolean,
+    isRecording: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    shape: Shape
 ) {
-    // handle showing Record on the first render and not Transcribing...
     var firstRender by remember { mutableStateOf(true) }
-    // handle stopwatch timer
     var seconds by remember { mutableIntStateOf(0) }
     var handler: Handler? by remember { mutableStateOf(null) }
     var start by remember { mutableLongStateOf(0) }
@@ -219,7 +320,7 @@ private fun RecordButton(
             handler = Handler(Looper.getMainLooper())
             handler!!.postDelayed(runnable, 1_000)
         } else {
-            handler!!.removeCallbacks(runnable)
+            handler?.removeCallbacks(runnable)
             handler = null
         }
         onClick()
@@ -233,11 +334,10 @@ private fun RecordButton(
             Text(stringResource(R.string.transcribing), fontSize = 16.sp)
         } else if (isRecording) {
             firstRender = false
-            Icon(Icons.Outlined.Check, stringResource(R.string.stop_recording))
+            Icon(Icons.Outlined.Stop, stringResource(R.string.stop_recording))
             Text(
-                " %d".format(seconds / 60) + ":%02d".format(
-                    seconds % 60
-                ), fontSize = 16.sp
+                " %d:%02d".format(seconds / 60, seconds % 60),
+                fontSize = 16.sp
             )
         } else {
             Icon(
