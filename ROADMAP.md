@@ -61,15 +61,17 @@ no clipboard history, no auto-switch-back keyboard.
 
 | # | Feature | Priority | Notes |
 |---|---------|----------|-------|
-| 1 | **Text keyboard fallback** — Full QWERTY layout users can switch to for manual typing | HIGH | Required for Play Store viability. Users need a way to type when they can't speak |
-| 2 | **Punctuation & numbers row** — Quick access to . , ! ? 0-9 without switching keyboards | HIGH | Can be a top row or swipe-up overlay |
-| 3 | **Voice Activity Detection (VAD)** — Auto-start/stop recording when user speaks/pauses | HIGH | Silero VAD is lightweight (~2MB). Eliminates manual start/stop |
-| 4 | **Last-used keyboard auto-switch** — Track which keyboard user switched FROM and auto-switch back to it. Uses ContentObserver on `Settings.Secure.DEFAULT_INPUT_METHOD` to record previous IME. Falls back to preferred keyboard setting if no history | HIGH | Better UX than cycling through all keyboards |
-| 5 | **Clipboard history** — Build our own clipboard history using `ClipboardManager.addPrimaryClipChangedListener()`. Captures copies from any app. Button on keyboard opens recent clips for quick paste. Stored locally, auto-prune old entries | HIGH | System clipboard listener is app-agnostic — works regardless of which keyboard copied the text. Cannot sync with Samsung/Gboard proprietary history but captures the same content independently |
-| 6 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
-| 7 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
-| 8 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
-| 9 | **Custom rewrite prompts** — Let users write their own Magic Rewrite style | LOW | TextField in settings, stored in SharedPreferences |
+| 1 | **Magic Rewrite panel (swipe-right)** — Swipe right on keyboard to reveal rewrite panel. Uses `HorizontalPager` (page 0 = keyboard, page 1 = rewrite). Single API call returns structured JSON with clean + all style variants. Two-step flow: (1) Clean baseline fixes spelling, grammar, punctuation; (2) style variants (Professional, Casual, Concise, Emojify) are derived from the clean text. Results shown as horizontal carousel with dot indicators. "Clean" is always the first card (most common use case for voice transcription). Tap [Use] to apply and auto-swipe back to keyboard | HIGH | Replaces current dead-code MagicMenu.kt. One API call instead of 5. JSON response: `{"clean":"...","professional":"...","casual":"...","concise":"...","emojify":"..."}` |
+| 2 | **Text keyboard fallback** — Full QWERTY layout users can switch to for manual typing | HIGH | Required for Play Store viability. Users need a way to type when they can't speak |
+| 3 | **Punctuation & numbers row** — Quick access to . , ! ? 0-9 without switching keyboards | HIGH | Can be a top row or swipe-up overlay |
+| 4 | **Voice Activity Detection (VAD)** — Auto-start/stop recording when user speaks/pauses | HIGH | Silero VAD is lightweight (~2MB). Eliminates manual start/stop |
+| 5 | **Last-used keyboard auto-switch** — Track which keyboard user switched FROM and auto-switch back to it. Uses ContentObserver on `Settings.Secure.DEFAULT_INPUT_METHOD` to record previous IME. Falls back to preferred keyboard setting if no history | HIGH | Better UX than cycling through all keyboards |
+| 6 | **Clipboard history** — Build our own clipboard history using `ClipboardManager.addPrimaryClipChangedListener()`. Captures copies from any app. Button on keyboard opens recent clips for quick paste. Stored locally, auto-prune old entries | HIGH | System clipboard listener is app-agnostic — works regardless of which keyboard copied the text. Cannot sync with Samsung/Gboard proprietary history but captures the same content independently |
+| 7 | **Streaming transcription** — Show partial results as user speaks instead of waiting until stop | MEDIUM | whisper.cpp supports chunked processing. Improves perceived speed |
+| 8 | **Emoji picker** — Basic emoji grid or search | MEDIUM | Android IME standard expectation |
+| 9 | **Language selection** — Let user pick transcription language (currently hardcoded to "en" in jni.c) | MEDIUM | Multilingual models already available; just need UI + JNI param |
+| 10 | **Custom rewrite prompts** — User-defined 6th card in the rewrite carousel. TextField where user types their own instruction (e.g. "Rewrite as if explaining to a 5-year-old"). Separate API call since it's user-defined. Saved styles persist in SharedPreferences | LOW | Builds on top of the swipe-right rewrite panel |
+| 11 | **Rewrite undo** — One-tap revert after applying a rewrite. Stores original text so user can undo if the result isn't right | LOW | Simple: save original in a variable before replacing |
 
 ---
 
