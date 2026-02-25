@@ -135,7 +135,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     FilledTonalButton(
                         onClick = { service.sendEnter() },
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1.5f)
                             .padding(btnPad),
                         shape = shape,
                         contentPadding = contentPad,
