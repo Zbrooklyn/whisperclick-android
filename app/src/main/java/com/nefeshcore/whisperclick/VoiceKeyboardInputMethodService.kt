@@ -13,6 +13,7 @@ import android.os.VibratorManager
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -428,7 +429,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         )
     }
 
-    // Enter key that respects imeOptions (Send, Search, Go, Next, Done)
+    // Enter key: newline for multi-line fields, IME action for single-line
     fun sendEnter() {
         haptic()
         val ei = currentEditorInfo
@@ -438,10 +439,16 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
             return
         }
         if (ei != null) {
-            val action = ei.imeOptions and EditorInfo.IME_MASK_ACTION
-            if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
-                ic.performEditorAction(action)
-                return
+            val isMultiLine = ei.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
+            val noEnterAction = ei.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
+
+            // Multi-line fields and fields with NO_ENTER_ACTION always get a newline
+            if (!isMultiLine && !noEnterAction) {
+                val action = ei.imeOptions and EditorInfo.IME_MASK_ACTION
+                if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                    ic.performEditorAction(action)
+                    return
+                }
             }
         }
         sendKeyPress(KeyEvent.KEYCODE_ENTER)
