@@ -17,10 +17,9 @@ import com.whispercpp.whisper.WhisperContext
 import com.nefeshcore.whisperclick.R
 import com.nefeshcore.whisperclick.utils.AppLog
 import com.nefeshcore.whisperclick.media.decodeShortArray
-import com.nefeshcore.whisperclick.media.decodeWaveFile
+import com.nefeshcore.whisperclick.media.encodeWaveFile
 import com.nefeshcore.whisperclick.recorder.Recorder
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -43,7 +42,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     private var whisperContext: WhisperContext? = null
     private var mediaPlayer: MediaPlayer? = null
     private var recordedFile: File? = null
-    private var currentJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -106,12 +104,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     }
 
 
-    private suspend fun readAudioSamples(file: File): FloatArray = withContext(Dispatchers.IO) {
-        stopPlayback()
-        startPlayback(file)
-        return@withContext decodeWaveFile(file)
-    }
-
     private suspend fun stopPlayback() = withContext(Dispatchers.Main) {
         mediaPlayer?.stop()
         mediaPlayer?.release()
@@ -133,59 +125,41 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
         printMessage("Done ($elapsed ms): \n$text\n")
     }
 
-    private suspend fun transcribeFile(file: File) {
-        if (!canTranscribe) {
-            return
-        }
-
-        canTranscribe = false
-
-        try {
-            currentJob?.cancel()
-            printMessage("Reading wave samples... ")
-            val data = readAudioSamples(file)
-            printMessage("${data.size / (16000 / 1000)} ms\n")
-            transcribeAudio(data)
-        } catch (e: Exception) {
-            Log.w(LOG_TAG, e)
-            printMessage("${e.localizedMessage}\n")
-        }
-
-        canTranscribe = true
-    }
-
-    private val onError = { e: Exception ->
-        viewModelScope.launch {
-            withContext(Dispatchers.Main) {
-                printMessage("${e.localizedMessage}\n")
-                isRecording = false
-            }
-        }
-    }
-
-    private val transcriptionCallback = { shortData: ShortArray ->
-        if (currentJob == null) {
-            currentJob = viewModelScope.launch {
-                printMessage(shortData.size.toString())
-                // convert ShortArray to FloatArray for transcription
-                val floatData = decodeShortArray(shortData, 1)
-                transcribeAudio(floatData)
-                currentJob = null
-            }
-        }
-
-    }
-
     fun toggleRecord() = viewModelScope.launch {
         try {
             if (isRecording) {
-                recorder.stopRecording()
+                val samples = recorder.stopRecording()
                 isRecording = false
-                recordedFile?.let { transcribeFile(it) }
+
+                if (samples.isNotEmpty() && canTranscribe) {
+                    canTranscribe = false
+                    try {
+                        // Save WAV and play back
+                        val file = recordedFile
+                        if (file != null) {
+                            withContext(Dispatchers.IO) { encodeWaveFile(file, samples) }
+                            stopPlayback()
+                            startPlayback(file)
+                        }
+                        // Transcribe directly from raw samples
+                        val data = decodeShortArray(samples, 1)
+                        printMessage("${data.size / (16000 / 1000)} ms\n")
+                        transcribeAudio(data)
+                    } catch (e: Exception) {
+                        Log.w(LOG_TAG, e)
+                        printMessage("${e.localizedMessage}\n")
+                    }
+                    canTranscribe = true
+                }
             } else {
                 stopPlayback()
                 val file = getTempFileForRecording()
-                recorder.startRecording(file, onError, transcriptionCallback)
+                recorder.startRecording { e ->
+                    viewModelScope.launch {
+                        printMessage("${e.localizedMessage}\n")
+                        isRecording = false
+                    }
+                }
                 isRecording = true
                 recordedFile = file
             }

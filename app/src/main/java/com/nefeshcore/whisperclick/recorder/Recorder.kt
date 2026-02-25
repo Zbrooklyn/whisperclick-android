@@ -4,52 +4,45 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import com.nefeshcore.whisperclick.media.encodeWaveFile
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class Recorder {
-    private val scope: CoroutineScope = CoroutineScope(
+    private val scope = CoroutineScope(
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     )
-    private var recorder: AudioRecordThread? = null
+    private var thread: AudioCaptureThread? = null
 
-    suspend fun startRecording(
-        outputFile: File,
-        onError: (Exception) -> Job,
-        transcriptionCallback: (ShortArray) -> Unit
-    ) =
-        withContext(scope.coroutineContext) {
-            recorder = AudioRecordThread(outputFile, onError, transcriptionCallback)
-            recorder?.start()
-        }
+    suspend fun startRecording(onError: (Exception) -> Unit) = withContext(scope.coroutineContext) {
+        thread = AudioCaptureThread(onError)
+        thread?.start()
+    }
 
-    suspend fun stopRecording() = withContext(scope.coroutineContext) {
-        recorder?.stopRecording()
+    suspend fun stopRecording(): ShortArray = withContext(scope.coroutineContext) {
+        val t = thread ?: return@withContext ShortArray(0)
+        t.requestStop()
         @Suppress("BlockingMethodInNonBlockingContext")
-        recorder?.join()
-        recorder = null
+        t.join()
+        thread = null
+        t.getSamples()
     }
 }
 
-private class AudioRecordThread(
-    private val outputFile: File,
-    private val onError: (Exception) -> Job,
-    private val transcriptionCallback: (ShortArray) -> Unit
-) :
-    Thread("AudioRecorder") {
-    private var quit = AtomicBoolean(false)
+private class AudioCaptureThread(
+    private val onError: (Exception) -> Unit
+) : Thread("AudioCapture") {
+    private val quit = AtomicBoolean(false)
+    private val chunks = mutableListOf<ShortArray>()
+    private var totalSamples = 0
 
     @SuppressLint("MissingPermission")
     override fun run() {
         try {
             val bufferSize = AudioRecord.getMinBufferSize(
-                16000,
+                SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
             ) * 4
@@ -57,7 +50,7 @@ private class AudioRecordThread(
 
             val audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
-                16000,
+                SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufferSize
@@ -65,36 +58,39 @@ private class AudioRecordThread(
 
             try {
                 audioRecord.startRecording()
-
-                val allData = mutableListOf<Short>()
-
                 while (!quit.get()) {
                     val read = audioRecord.read(buffer, 0, buffer.size)
                     if (read > 0) {
-                        for (i in 0 until read) {
-                            allData.add(buffer[i])
-                        }
+                        chunks.add(buffer.copyOfRange(0, read))
+                        totalSamples += read
                     } else {
-                        throw java.lang.RuntimeException("audioRecord.read returned $read")
+                        throw RuntimeException("audioRecord.read returned $read")
                     }
-                    // run transcription callback with at most last 30s of audio
-                    // to prevent O(n²) slowdown on longer recordings
-                    val maxSamples = 16000 * 30
-                    val start = if (allData.size > maxSamples) allData.size - maxSamples else 0
-                    transcriptionCallback(allData.subList(start, allData.size).toShortArray())
                 }
-
                 audioRecord.stop()
-                encodeWaveFile(outputFile, allData.toShortArray())
             } finally {
                 audioRecord.release()
             }
         } catch (e: Exception) {
-            onError(e)
+            if (!quit.get()) onError(e)
         }
     }
 
-    fun stopRecording() {
+    fun requestStop() {
         quit.set(true)
+    }
+
+    fun getSamples(): ShortArray {
+        val result = ShortArray(totalSamples)
+        var offset = 0
+        for (chunk in chunks) {
+            chunk.copyInto(result, offset)
+            offset += chunk.size
+        }
+        return result
+    }
+
+    companion object {
+        const val SAMPLE_RATE = 16000
     }
 }

@@ -23,12 +23,10 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.whispercpp.whisper.WhisperContext
 import com.nefeshcore.whisperclick.media.decodeShortArray
-import com.nefeshcore.whisperclick.media.decodeWaveFile
 import com.nefeshcore.whisperclick.recorder.Recorder
 import com.nefeshcore.whisperclick.utils.AppLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -167,7 +165,6 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
     // copy whispercppdemo MainScreenViewModel implementation
     private var whisperContext: WhisperContext? = null
-    private var recordedFile: File? = null
     private var recorder: Recorder = Recorder()
     var canTranscribe by mutableStateOf(false)
         private set
@@ -177,9 +174,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     private var samplesPath: File? = null
     private var sharedPref: SharedPreferences? = null
     private val maxThreads = Runtime.getRuntime().availableProcessors()
-    private var currentJob: Job? = null
     private var trailing: String? = null
-    private var lastTranscribedText: String? = null
 
     private fun checkBoolPref(resource: Int): Boolean? {
         return sharedPref?.getBoolean(
@@ -230,74 +225,40 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         //whisperContext = WhisperContext.createContextFromFile(firstModel.absolutePath)
     }
 
-    private suspend fun transcribeFile(file: File) {
-        if (!canTranscribe) {
-            return
-        }
-        canTranscribe = false
-        try {
-            currentJob?.cancel()
-            printMessage("Reading wave samples... ")
-            val data = decodeWaveFile(file)
-            transcribeAudio(data)
-            currentInputConnection.finishComposingText()
-        } catch (e: Exception) {
-            Log.w(LOG_TAG, e)
-            printMessage("${e.localizedMessage}\n")
-        }
-    }
-
-    private suspend fun transcribeAudio(data: FloatArray) {
-        try {
-            printMessage("${data.size / (16000 / 1000)} ms\n")
-            val nThreads =
-                sharedPref?.getInt(application.getString(R.string.num_threads), maxThreads)
-            printMessage("Transcribing data...\n")
-            val start = System.currentTimeMillis()
-            var text = whisperContext?.transcribeData(data, false, nThreads ?: maxThreads)?.trim()
-            printMessage(text.toString())
-            // remove special tokens like [MUSIC] or [BLANK_AUDIO]
-            // bizarrely, it sometimes also does *music* or (music) so handle these case-s too
-            // there's another case with flanking ♪ but it seems slightly different
-            text = text?.replace(Regex("""\[[-_a-zA-Z0-9 ]*]"""), "")
-            text = text?.replace(Regex("""\*[-_a-zA-Z0-9 ]*\*"""), "")
-            text = text?.replace(Regex("""\([-_a-zA-Z0-9 ]*\)"""), "")
-            if (checkBoolPref(R.string.casual_mode) == true) {
-                printMessage("keeping it casual...\n")
-                text = text?.trim()?.lowercase()
-                // remove trailing punctuation but not e.g. ! or ?
-                if (text?.length!! > 0 && text[text.lastIndex] in charArrayOf('.', ',', ';')) {
-                    // < makes the range exclusive instead of inclusive, dropping the last char
-                    text = text.slice(0..<text.lastIndex)
-                }
+    private suspend fun transcribe(samples: ShortArray): String? {
+        if (samples.isEmpty()) return null
+        val data = decodeShortArray(samples, 1)
+        val nThreads =
+            sharedPref?.getInt(application.getString(R.string.num_threads), maxThreads)
+        val durationMs = samples.size / (16000 / 1000)
+        printMessage("Transcribing ${durationMs}ms of audio...\n")
+        val start = System.currentTimeMillis()
+        var text = whisperContext?.transcribeData(data, false, nThreads ?: maxThreads)?.trim()
+            ?: return null
+        // remove special tokens like [MUSIC] or [BLANK_AUDIO]
+        text = text.replace(Regex("""\[[-_a-zA-Z0-9 ]*]"""), "")
+        text = text.replace(Regex("""\*[-_a-zA-Z0-9 ]*\*"""), "")
+        text = text.replace(Regex("""\([-_a-zA-Z0-9 ]*\)"""), "")
+        if (checkBoolPref(R.string.casual_mode) == true) {
+            text = text.trim().lowercase()
+            if (text.isNotEmpty() && text.last() in charArrayOf('.', ',', ';')) {
+                text = text.dropLast(1)
             }
-            // add text only if non-empty
-            // avoids adding just a single space for empty messages
-            if (text?.length!! > 0) {
-                lastTranscribedText = text + (trailing ?: "")
-                currentInputConnection.setComposingText(lastTranscribedText, 1)
-            }
-            val elapsed = System.currentTimeMillis() - start
-            printMessage("Done ($elapsed ms): \n$text\n")
-        } catch (e: Exception) {
-            Log.w(LOG_TAG, e)
-            printMessage("${e.localizedMessage}\n")
         }
-
-        canTranscribe = true
+        val elapsed = System.currentTimeMillis() - start
+        printMessage("Done (${elapsed}ms): $text\n")
+        return text.ifEmpty { null }
     }
 
     fun cancelRecord() = scope.launch {
         try {
             if (isRecording) {
                 if (checkBoolPref(R.string.pause_media) == true) {
-                    focusRequest.let { audioManager.abandonAudioFocusRequest(it) }
+                    audioManager.abandonAudioFocusRequest(focusRequest)
                 }
-                currentJob?.cancel()
-                currentInputConnection.finishComposingText()
                 recorder.stopRecording()
+                currentInputConnection.finishComposingText()
                 isRecording = false
-                lastTranscribedText = null
             }
         } catch (e: Exception) {
             Log.w(LOG_TAG, e)
@@ -306,73 +267,41 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         }
     }
 
-    private val onError = { e: Exception ->
-        scope.launch {
-            withContext(Dispatchers.Main) {
-                printMessage("${e.localizedMessage}\n")
-                currentJob?.cancel()
-                isRecording = false
-            }
-        }
-    }
-
-    private val transcriptionCallback = { shortData: ShortArray ->
-        if (currentJob == null) {
-            currentJob = scope.launch {
-                printMessage(shortData.size.toString())
-                // convert ShortArray to FloatArray for transcription
-                val floatData = decodeShortArray(shortData, 1)
-                transcribeAudio(floatData)
-                currentJob = null
-            }
-        }
-    }
-
     fun toggleRecord() = scope.launch {
         try {
             if (isRecording) {
                 AppLog.log("Keyboard", "Recording stopped")
                 if (checkBoolPref(R.string.pause_media) == true) {
-                    focusRequest.let { audioManager.abandonAudioFocusRequest(it) }
+                    audioManager.abandonAudioFocusRequest(focusRequest)
                 }
-                recorder.stopRecording()
+                val samples = recorder.stopRecording()
                 isRecording = false
-                val pendingJob = currentJob
-                if (pendingJob != null) {
-                    // Wait for in-flight live transcription to finish instead of
-                    // canceling and re-transcribing from scratch
-                    AppLog.log("Keyboard", "Waiting for live transcription to finish...")
-                    pendingJob.join()
-                    currentJob = null
-                    currentInputConnection.finishComposingText()
-                    AppLog.log("Keyboard", "Text finalized from live transcription")
-                } else if (lastTranscribedText != null) {
-                    // Last live transcription already completed — just finalize
-                    currentInputConnection.finishComposingText()
-                    AppLog.log("Keyboard", "Text finalized from cached result")
-                } else {
-                    // No live transcription result — transcribe the recorded file
-                    AppLog.log("Keyboard", "No live result, transcribing file...")
-                    recordedFile?.let { transcribeFile(it) }
+
+                if (samples.isNotEmpty() && canTranscribe) {
+                    canTranscribe = false
+                    currentInputConnection.setComposingText("Transcribing...", 1)
+                    val text = transcribe(samples)
+                    if (text != null) {
+                        currentInputConnection.setComposingText(text + (trailing ?: ""), 1)
+                    }
+                    canTranscribe = true
                 }
-                lastTranscribedText = null
+                currentInputConnection.finishComposingText()
             } else {
                 if (checkBoolPref(R.string.pause_media) == true) {
-                    // Request focus
                     val result = audioManager.requestAudioFocus(focusRequest)
                     if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                        // Failed to gain audio focus
                         Log.w(LOG_TAG, "Failed to gain audio focus")
                         return@launch
                     }
                 }
                 trailing = null
-                lastTranscribedText = null
-                val file = getTempFileForRecording()
-                recorder.startRecording(file, onError, transcriptionCallback)
+                recorder.startRecording { e ->
+                    AppLog.log("Keyboard", "Recording error: ${e.localizedMessage}")
+                    scope.launch { isRecording = false }
+                }
                 AppLog.log("Keyboard", "Recording started")
                 isRecording = true
-                recordedFile = file
                 // if not preceded by empty space, commit empty space
                 val charBefore = currentInputConnection.getTextBeforeCursor(1, 0)
                 if (charBefore?.isNotEmpty()?.and(charBefore != " ") == true) {
@@ -383,17 +312,12 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 if (charAfter != " ") {
                     trailing = " "
                 }
-
             }
         } catch (e: Exception) {
             Log.w(LOG_TAG, e)
             printMessage("${e.localizedMessage}\n")
             isRecording = false
         }
-    }
-
-    private suspend fun getTempFileForRecording() = withContext(Dispatchers.IO) {
-        File.createTempFile("recording", "wav")
     }
 
     // for del and newline buttons
