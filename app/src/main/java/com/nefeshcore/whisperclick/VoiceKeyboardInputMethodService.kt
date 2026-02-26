@@ -3,6 +3,9 @@ package com.nefeshcore.whisperclick
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.inputmethodservice.InputMethodService
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -197,6 +200,11 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
             return
         }
 
+        if (!isNetworkAvailable()) {
+            rewriteError = "No internet connection"
+            return
+        }
+
         val (client, apiKey) = getRewriteClient()
         if (apiKey.isEmpty()) {
             rewriteError = "Set ${client.name} API key in Settings"
@@ -229,6 +237,14 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         val ic = currentInputConnection ?: return
         val original = rewriteOriginalText
         if (original.isNotEmpty()) {
+            // Verify text before cursor still matches what we're replacing
+            val beforeCursor = ic.getTextBeforeCursor(original.length, 0)?.toString() ?: ""
+            if (beforeCursor != original) {
+                AppLog.log("Rewrite", "Text mismatch — cursor moved or text edited since rewrite was requested")
+                rewriteError = "Text changed since rewrite — please try again"
+                clearRewriteState()
+                return
+            }
             preRewriteText = original
             ic.deleteSurroundingText(original.length, 0)
             ic.commitText(text, 1)
@@ -263,6 +279,13 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     private var clipboardManager: ClipboardManager? = null
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
         val clip = clipboardManager?.primaryClip ?: return@OnPrimaryClipChangedListener
+        // Skip sensitive items (passwords, 2FA codes from password managers)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val isSensitive = clip.description.extras?.getBoolean(
+                android.content.ClipDescription.EXTRA_IS_SENSITIVE, false
+            ) == true
+            if (isSensitive) return@OnPrimaryClipChangedListener
+        }
         if (clip.itemCount > 0) {
             val text = clip.getItemAt(0).text?.toString() ?: return@OnPrimaryClipChangedListener
             if (text.isNotBlank()) {
@@ -523,6 +546,12 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 }
                 ic?.finishComposingText()
             } else {
+                // Verify RECORD_AUDIO permission is still granted
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    AppLog.log("Keyboard", "RECORD_AUDIO permission not granted")
+                    printMessage("Microphone permission required — open WhisperClick settings to grant\n")
+                    return@launch
+                }
                 if (checkBoolPref(R.string.pause_media) == true) {
                     val result = audioManager.requestAudioFocus(focusRequest)
                     if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
@@ -644,9 +673,20 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         AppLog.log("Keyboard", "STT mode: $mode")
     }
 
+    private fun isNetworkAvailable(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     // Cloud STT via OpenAI Whisper API
     private suspend fun transcribeCloud(samples: ShortArray): String? {
         if (samples.isEmpty()) return null
+        if (!isNetworkAvailable()) {
+            printMessage("No internet connection — switch to Local mode or connect to network\n")
+            return null
+        }
         val apiKey = sharedPref?.getString("openai_api_key", "") ?: ""
         if (apiKey.isEmpty()) {
             printMessage("Cloud STT requires OpenAI API key\n")
@@ -660,7 +700,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         if (result != null) {
             printMessage("Cloud done (${elapsed}ms): $result\n")
         } else {
-            printMessage("Cloud STT failed\n")
+            printMessage("Cloud STT failed — check your network and API key\n")
         }
         return result
     }

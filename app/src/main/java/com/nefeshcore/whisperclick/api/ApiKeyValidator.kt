@@ -34,9 +34,10 @@ object ApiKeyValidator {
     suspend fun validateGemini(apiKey: String): Result = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) return@withContext Result.Invalid("Key is empty")
         try {
-            val url = URL("https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey")
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
+            conn.setRequestProperty("x-goog-api-key", apiKey)
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
             val code = conn.responseCode

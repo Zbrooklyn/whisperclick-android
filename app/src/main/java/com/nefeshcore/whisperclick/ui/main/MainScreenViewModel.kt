@@ -21,7 +21,7 @@ import com.nefeshcore.whisperclick.media.encodeWaveFile
 import com.nefeshcore.whisperclick.recorder.Recorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -175,11 +175,12 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     }
 
     override fun onCleared() {
-        runBlocking {
-            whisperContext?.release()
-            whisperContext = null
-            stopPlayback()
-        }
+        // Release on background thread — never block main thread (causes ANR)
+        val ctx = whisperContext
+        whisperContext = null
+        CoroutineScope(Dispatchers.Default).launch { ctx?.release() }
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     companion object {
