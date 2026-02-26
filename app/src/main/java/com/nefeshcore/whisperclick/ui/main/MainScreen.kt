@@ -281,8 +281,13 @@ private fun MainScreen(
 
                     // Local mode: model management + threads
                     if (sttMode == "local") {
-                        val activeLabel =
-                            if (activeModel.isEmpty()) "Default (bundled)" else activeModel
+                        val activeLabel = if (activeModel.isEmpty()) {
+                            "Default (bundled)"
+                        } else {
+                            ModelManager.availableModels
+                                .firstOrNull { it.fileName == activeModel }?.name
+                                ?: activeModel
+                        }
                         ListItem(
                             headlineContent = { Text("Active Model") },
                             leadingContent = { Icon(Icons.Outlined.Memory, null) },
@@ -473,6 +478,7 @@ private fun MainScreen(
                 if (showModelDialog) {
                     val allModels =
                         bundledModels + downloadedModels.filter { it !in bundledModels }
+                    val modelLookup = ModelManager.availableModels.associateBy { it.fileName }
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { showModelDialog = false },
                         title = { Text("Select Model") },
@@ -481,6 +487,7 @@ private fun MainScreen(
                                 item {
                                     ListItem(
                                         headlineContent = { Text("Default (bundled)") },
+                                        supportingContent = { Text("Tiny English \u00b7 Fast") },
                                         modifier = Modifier.clickable {
                                             activeModel = ""
                                             ModelManager.setActiveModel(context, "")
@@ -489,15 +496,21 @@ private fun MainScreen(
                                     )
                                 }
                                 items(allModels.size) { i ->
-                                    val name = allModels[i]
+                                    val fileName = allModels[i]
+                                    val info = modelLookup[fileName]
+                                    val displayName = info?.name ?: fileName
+                                    val subtitle = if (info != null) {
+                                        "${info.sizeMb}MB \u00b7 ${info.tier}" +
+                                            if (fileName in bundledModels) " \u00b7 Bundled" else ""
+                                    } else {
+                                        if (fileName in bundledModels) "Bundled" else "Downloaded"
+                                    }
                                     ListItem(
-                                        headlineContent = { Text(name) },
-                                        supportingContent = {
-                                            Text(if (name in bundledModels) "Bundled" else "Downloaded")
-                                        },
+                                        headlineContent = { Text(displayName) },
+                                        supportingContent = { Text(subtitle) },
                                         modifier = Modifier.clickable {
-                                            activeModel = name
-                                            ModelManager.setActiveModel(context, name)
+                                            activeModel = fileName
+                                            ModelManager.setActiveModel(context, fileName)
                                             showModelDialog = false
                                         }
                                     )
@@ -781,27 +794,42 @@ private fun AppLogContent() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.End
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = {
-            val clipboard =
-                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(
-                ClipData.newPlainText("WhisperClick Log", logText)
-            )
-            Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
-        }) {
-            Icon(
-                Icons.Outlined.ContentCopy, "Copy log",
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        IconButton(onClick = { AppLog.clear() }) {
-            Icon(
-                Icons.Outlined.Delete, "Clear log",
-                modifier = Modifier.size(18.dp)
-            )
+        Text(
+            "Activity Log",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row {
+            IconButton(
+                onClick = {
+                    val clipboard =
+                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("WhisperClick Log", logText)
+                    )
+                    Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.ContentCopy, "Copy log",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            IconButton(
+                onClick = { AppLog.clear() },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Delete, "Clear log",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
     SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {

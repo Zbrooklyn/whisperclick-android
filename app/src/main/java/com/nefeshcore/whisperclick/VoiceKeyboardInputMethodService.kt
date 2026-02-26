@@ -406,8 +406,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         private set
     var isTranscribing by mutableStateOf(false)
         private set
-    @Volatile
-    private var transcriptionCancelled = false
+    private var transcriptionJob: Job? = null
     private var isModelLoading = false
     var useCloudStt by mutableStateOf(false)
         private set
@@ -503,8 +502,11 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun cancelTranscription() {
-        transcriptionCancelled = true
-        AppLog.log("Keyboard", "Transcription cancel requested")
+        transcriptionJob?.cancel()
+        transcriptionJob = null
+        isTranscribing = false
+        canTranscribe = true
+        AppLog.log("Keyboard", "Transcription cancelled")
     }
 
     fun cancelRecord() = scope.launch {
@@ -537,15 +539,23 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                 if (samples.isNotEmpty() && (canTranscribe || useCloudStt)) {
                     canTranscribe = false
                     isTranscribing = true
-                    transcriptionCancelled = false
-                    val text = if (useCloudStt) transcribeCloud(samples) else transcribe(samples)
-                    isTranscribing = false
-                    if (transcriptionCancelled) {
-                        AppLog.log("Keyboard", "Transcription cancelled")
-                    } else if (text != null) {
-                        ic?.commitText(text + (trailing ?: ""), 1)
+                    transcriptionJob = scope.launch {
+                        try {
+                            val text = if (useCloudStt) transcribeCloud(samples) else transcribe(samples)
+                            if (text != null) {
+                                ic?.commitText(text + (trailing ?: ""), 1)
+                            }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            AppLog.log("Keyboard", "Transcription job cancelled")
+                        } catch (e: Exception) {
+                            Log.w(LOG_TAG, e)
+                            printMessage("Transcription error: ${e.localizedMessage}\n")
+                        } finally {
+                            isTranscribing = false
+                            canTranscribe = true
+                            transcriptionJob = null
+                        }
                     }
-                    canTranscribe = true
                 }
             } else {
                 // Verify RECORD_AUDIO permission is still granted
