@@ -2,6 +2,11 @@ package com.nefeshcore.whisperclick
 
 import android.annotation.SuppressLint
 import android.view.KeyEvent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -70,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.res.painterResource
@@ -862,6 +868,22 @@ private fun RecordButton(
         }
     }
 
+    // Pulse animation during active states (recording / transcribing)
+    val isActive = isRecording || isTranscribing
+    val pulseAlpha = if (isActive) {
+        val transition = rememberInfiniteTransition(label = "pulse")
+        val alpha by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = if (isRecording) 0.5f else 0.6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(if (isRecording) 800 else 1200),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseAlpha"
+        )
+        alpha
+    } else 1f
+
     Button(
         onClick = {
             if (longPressTriggered) return@Button
@@ -873,7 +895,7 @@ private fun RecordButton(
         },
         enabled = enabled || isTranscribing,
         interactionSource = interactionSource,
-        modifier = modifier,
+        modifier = modifier.graphicsLayer { alpha = pulseAlpha },
         shape = shape
     ) {
         val iconSize = 28.dp
