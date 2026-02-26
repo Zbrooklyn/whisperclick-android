@@ -78,7 +78,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
 import kotlinx.coroutines.delay
@@ -115,20 +116,29 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
             onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
         KaiboardTheme(themeMode = themeMode) {
-            // Animate height: keyboard is compact, panels (rewrite/clipboard) need more room
-            val keyboardHeight = if (showEditRow) 96.dp else 56.dp
-            val panelHeight = 300.dp
-            val scrollProgress = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
-                .coerceIn(0f, 2f)
-            // Height transitions once from keyboard→panel, stays at panel for pages 1-2
-            val heightFraction = scrollProgress.coerceAtMost(1f)
-            val pagerHeight = lerp(keyboardHeight, panelHeight, heightFraction)
+            // Height calculated in layout phase (not composition) to avoid per-frame recomposition jitter
+            val keyboardHeightDp = if (showEditRow) 96.dp else 56.dp
+            val panelHeightDp = 300.dp
+            val density = LocalDensity.current
+            val keyboardHeightPx = with(density) { keyboardHeightDp.roundToPx() }
+            val panelHeightPx = with(density) { panelHeightDp.roundToPx() }
 
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(pagerHeight)
+                    .layout { measurable, constraints ->
+                        // Read pager scroll in layout phase — no recomposition triggered
+                        val fraction = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+                            .coerceIn(0f, 1f)
+                        val h = (keyboardHeightPx + (panelHeightPx - keyboardHeightPx) * fraction).toInt()
+                        val placeable = measurable.measure(
+                            constraints.copy(minHeight = h, maxHeight = h)
+                        )
+                        layout(placeable.width, h) {
+                            placeable.place(0, 0)
+                        }
+                    }
                     .background(MaterialTheme.colorScheme.surface)
             ) { page ->
                 when (page) {
@@ -419,6 +429,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         val (styleName, text) = variantList[page]
                         VariantCard(
                             styleName = styleName,
+                            description = variantDescription(styleName),
                             text = text,
                             onApply = {
                                 service.applyRewrite(text)
@@ -470,9 +481,19 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
         }
     }
 
+    private fun variantDescription(styleName: String): String = when (styleName) {
+        "Clean" -> "Grammar & punctuation fix"
+        "Professional" -> "Formal tone"
+        "Casual" -> "Relaxed, conversational"
+        "Concise" -> "Shorter, tighter"
+        "Emojify" -> "Adds relevant emojis"
+        else -> ""
+    }
+
     @Composable
     private fun VariantCard(
         styleName: String,
+        description: String,
         text: String,
         onApply: () -> Unit
     ) {
@@ -488,12 +509,21 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    styleName,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        styleName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (description.isNotEmpty()) {
+                        Text(
+                            description,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 TextButton(
                     onClick = onApply,
                     modifier = Modifier.height(32.dp),
