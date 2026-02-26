@@ -1,6 +1,7 @@
 package com.nefeshcore.whisperclick.model
 
 import android.content.Context
+import com.nefeshcore.whisperclick.R
 import com.nefeshcore.whisperclick.utils.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,14 +59,16 @@ object ModelManager {
         return context.assets.list("models/")?.toList() ?: emptyList()
     }
 
+    private fun getPrefs(context: Context) = context.getSharedPreferences(
+        context.getString(R.string.preference_file_key), Context.MODE_PRIVATE
+    )
+
     fun getActiveModelName(context: Context): String {
-        val prefs = context.getSharedPreferences("com.nefeshcore.whisperclick.settings", Context.MODE_PRIVATE)
-        return prefs.getString("active_model", "") ?: ""
+        return getPrefs(context).getString("active_model", "") ?: ""
     }
 
     fun setActiveModel(context: Context, modelFileName: String) {
-        val prefs = context.getSharedPreferences("com.nefeshcore.whisperclick.settings", Context.MODE_PRIVATE)
-        prefs.edit().putString("active_model", modelFileName).apply()
+        getPrefs(context).edit().putString("active_model", modelFileName).apply()
     }
 
     fun deleteModel(context: Context, fileName: String): Boolean {
@@ -113,8 +116,10 @@ object ModelManager {
             _progress.value = DownloadProgress(model, tempFile.length(), totalBytes, true)
 
             val input = connection.inputStream
-            val output = tempFile.outputStream().let {
-                if (responseCode == 206) java.io.FileOutputStream(tempFile, true) else it
+            val output = if (responseCode == 206) {
+                java.io.FileOutputStream(tempFile, true)  // append for resume
+            } else {
+                tempFile.outputStream()  // overwrite for fresh download
             }
 
             val buffer = ByteArray(8192)

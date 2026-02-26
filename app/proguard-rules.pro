@@ -1,21 +1,37 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# WhisperClick ProGuard Rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve line numbers for crash reports
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# --- JNI (whisper.cpp native interface) ---
+# WhisperLib has external (JNI) methods called from native code.
+# WhisperContext wraps the native pointer. Both must keep names intact.
+-keep class com.whispercpp.whisper.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# --- API model classes (parsed from JSON via org.json) ---
+# Field names must match JSON keys ("clean", "professional", etc.)
+-keep class com.nefeshcore.whisperclick.api.RewriteVariants { *; }
+-keep class com.nefeshcore.whisperclick.api.RewriteProvider { *; }
+
+# --- InputMethodService ---
+# IME service is declared in manifest and instantiated by the framework
+-keep class com.nefeshcore.whisperclick.VoiceKeyboardInputMethodService { *; }
+-keep class com.nefeshcore.whisperclick.VoiceKeyboardView { *; }
+
+# --- Compose ---
+# Compose compiler generates classes that shouldn't be renamed
+-dontwarn androidx.compose.**
+-keep class androidx.compose.** { *; }
+
+# --- Kotlin metadata (needed for reflection and Compose) ---
+-keepattributes *Annotation*
+-keepattributes RuntimeVisibleAnnotations
+-keep class kotlin.Metadata { *; }
+
+# --- Coroutines ---
+-dontwarn kotlinx.coroutines.**
+-keep class kotlinx.coroutines.** { *; }
+
+# --- Accompanist ---
+-dontwarn com.google.accompanist.**

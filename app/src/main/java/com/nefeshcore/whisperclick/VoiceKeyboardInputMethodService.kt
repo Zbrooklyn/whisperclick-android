@@ -210,12 +210,18 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
 
         AppLog.log("Rewrite", "Requesting all variants (${client.name})...")
         scope.launch {
-            val start = System.currentTimeMillis()
-            val variants = client.rewriteAll(apiKey, textBefore)
-            val elapsed = System.currentTimeMillis() - start
-            AppLog.log("Rewrite", "All variants received (${elapsed}ms)")
-            rewriteVariants = variants
-            isRewriting = false
+            try {
+                val start = System.currentTimeMillis()
+                val variants = client.rewriteAll(apiKey, textBefore)
+                val elapsed = System.currentTimeMillis() - start
+                AppLog.log("Rewrite", "All variants received (${elapsed}ms)")
+                rewriteVariants = variants
+            } catch (e: Exception) {
+                AppLog.log("Rewrite", "ERROR: ${e.javaClass.simpleName}: ${e.message}")
+                rewriteError = "Rewrite failed: ${e.message ?: "Unknown error"}"
+            } finally {
+                isRewriting = false
+            }
         }
     }
 
