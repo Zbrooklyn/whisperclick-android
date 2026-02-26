@@ -187,8 +187,8 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     isRecording = service.isRecording,
                     isTranscribing = service.isTranscribing,
                     isCloudMode = service.useCloudStt,
-                    onClick = service::toggleRecord,
-                    onCancel = service::cancelTranscription,
+                    onClick = { service.haptic(); service.toggleRecord() },
+                    onCancel = { service.haptic(); service.cancelTranscription() },
                     onLongPress = service::toggleSttMode,
                     modifier = Modifier
                         .weight(3f)
@@ -247,10 +247,11 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         if (service.shouldRenderSwitcher()) {
                             service.switchKeyboard()
                         } else {
+                            service.haptic()
                             onEditRowToggle(!showEditRow)
                         }
                     },
-                    onLongPress = { onEditRowToggle(!showEditRow) },
+                    onLongPress = { service.haptic(); onEditRowToggle(!showEditRow) },
                     modifier = Modifier
                         .weight(1f)
                         .padding(btnPad),
@@ -347,7 +348,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                 Row {
                     if (variants == null && !isRewriting) {
                         Button(
-                            onClick = { service.requestRewriteAll() },
+                            onClick = { service.haptic(); service.requestRewriteAll() },
                             modifier = Modifier.height(32.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                             shape = RoundedCornerShape(8.dp),
@@ -358,6 +359,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     }
                     OutlinedButton(
                         onClick = {
+                            service.haptic()
                             service.clearRewriteState()
                             onBack()
                         },
@@ -575,7 +577,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                 Row {
                     if (history.isNotEmpty()) {
                         TextButton(
-                            onClick = { service.clearClipHistory() },
+                            onClick = { service.haptic(); service.clearClipHistory() },
                             modifier = Modifier.height(32.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         ) {
@@ -584,7 +586,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         Spacer(Modifier.width(4.dp))
                     }
                     OutlinedButton(
-                        onClick = onBack,
+                        onClick = { service.haptic(); onBack() },
                         modifier = Modifier.height(32.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         shape = RoundedCornerShape(8.dp),

@@ -39,6 +39,7 @@ import com.nefeshcore.whisperclick.recorder.Recorder
 import com.nefeshcore.whisperclick.utils.AppLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -176,6 +177,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         private set
 
     private var preRewriteText: String? = null // for undo
+    private var rewriteJob: Job? = null
 
     fun getRewriteClient(): Pair<com.nefeshcore.whisperclick.api.RewriteProvider, String> {
         val provider = sharedPref?.getString("ai_provider", "gemini") ?: "gemini"
@@ -217,7 +219,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         isRewriting = true
 
         AppLog.log("Rewrite", "Requesting all variants (${client.name})...")
-        scope.launch {
+        rewriteJob = scope.launch {
             try {
                 val start = System.currentTimeMillis()
                 val variants = client.rewriteAll(apiKey, textBefore)
@@ -234,6 +236,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun applyRewrite(text: String) {
+        haptic()
         val ic = currentInputConnection ?: return
         val original = rewriteOriginalText
         if (original.isNotEmpty()) {
@@ -266,6 +269,8 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun clearRewriteState() {
+        rewriteJob?.cancel()
+        rewriteJob = null
         rewriteOriginalText = ""
         rewriteVariants = null
         rewriteError = null
@@ -310,6 +315,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun deleteClipEntry(index: Int) {
+        haptic()
         val current = clipboardHistory.toMutableList()
         if (index in current.indices) {
             current.removeAt(index)
@@ -508,7 +514,6 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                     audioManager.abandonAudioFocusRequest(focusRequest)
                 }
                 recorder.stopRecording()
-                currentInputConnection?.finishComposingText()
                 isRecording = false
             }
         } catch (e: Exception) {
@@ -533,18 +538,15 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                     canTranscribe = false
                     isTranscribing = true
                     transcriptionCancelled = false
-                    ic?.setComposingText("Transcribing...", 1)
                     val text = if (useCloudStt) transcribeCloud(samples) else transcribe(samples)
                     isTranscribing = false
                     if (transcriptionCancelled) {
                         AppLog.log("Keyboard", "Transcription cancelled")
-                        ic?.setComposingText("", 1)
                     } else if (text != null) {
-                        ic?.setComposingText(text + (trailing ?: ""), 1)
+                        ic?.commitText(text + (trailing ?: ""), 1)
                     }
                     canTranscribe = true
                 }
-                ic?.finishComposingText()
             } else {
                 // Verify RECORD_AUDIO permission is still granted
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -660,6 +662,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun openSettings() {
+        haptic()
         val intent = android.content.Intent(this, MainActivity::class.java)
         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
