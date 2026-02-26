@@ -27,8 +27,8 @@ android {
         applicationId "com.nefeshcore.whisperclick"
         minSdk 28
         targetSdk 34
-        versionCode 7
-        versionName "0.9.1-beta"
+        versionCode 8
+        versionName "0.10.0-beta"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         signingConfig signingConfigs.debug

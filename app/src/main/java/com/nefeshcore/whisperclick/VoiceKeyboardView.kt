@@ -117,7 +117,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
         KaiboardTheme(themeMode = themeMode) {
             // Animate height: keyboard is compact, panels (rewrite/clipboard) need more room
             val keyboardHeight = if (showEditRow) 96.dp else 56.dp
-            val panelHeight = 160.dp
+            val panelHeight = 300.dp
             val scrollProgress = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
                 .coerceIn(0f, 2f)
             // Height transitions once from keyboard→panel, stays at panel for pages 1-2
@@ -310,7 +310,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
 
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             // Header
@@ -370,7 +370,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(80.dp),
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -392,7 +392,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(80.dp),
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -412,7 +412,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         state = cardPagerState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(90.dp),
+                            .weight(1f),
                         contentPadding = PaddingValues(horizontal = 8.dp),
                         pageSpacing = 8.dp
                     ) { page ->
@@ -455,7 +455,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(80.dp),
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -478,10 +478,10 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(10.dp)
+                .padding(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -490,24 +490,24 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
             ) {
                 Text(
                     styleName,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 TextButton(
                     onClick = onApply,
-                    modifier = Modifier.height(28.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                 ) {
-                    Text("Use", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Use", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Text(
                 text,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
+                maxLines = 10,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -621,15 +621,15 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     entry.text,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     relativeTime(entry.timestamp),
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
