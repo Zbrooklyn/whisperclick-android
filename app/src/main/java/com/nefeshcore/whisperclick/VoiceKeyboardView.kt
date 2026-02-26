@@ -57,6 +57,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -103,7 +104,16 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
         val prefs = service.getSharedPreferences(
             service.getString(R.string.preference_file_key), android.content.Context.MODE_PRIVATE
         )
-        val themeMode = prefs.getString("theme_mode", "dark") ?: "dark"
+        var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
+        DisposableEffect(prefs) {
+            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == "theme_mode") {
+                    themeMode = prefs.getString("theme_mode", "dark") ?: "dark"
+                }
+            }
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+            onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+        }
         KaiboardTheme(themeMode = themeMode) {
             // Animate height: keyboard is compact, panels (rewrite/clipboard) need more room
             val keyboardHeight = if (showEditRow) 96.dp else 56.dp
