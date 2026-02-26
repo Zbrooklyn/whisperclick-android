@@ -239,10 +239,10 @@ private fun MainScreen(
                 SetupSection(sharedPref)
             }
 
-            // ── Speech-to-Text (dynamic based on mode) ──
+            // ── Voice & AI (STT mode + AI provider + API keys) ──
             item {
-                SectionCard(title = "Speech-to-Text") {
-                    // Mode toggle
+                SectionCard(title = "Voice & AI") {
+                    // STT Mode toggle
                     ListItem(
                         headlineContent = { Text("STT Mode") },
                         leadingContent = { Icon(Icons.Outlined.Cloud, null) },
@@ -261,7 +261,8 @@ private fun MainScreen(
                                             putString("stt_mode", "local"); apply()
                                         }
                                     },
-                                    label = { Text("Local Whisper") }
+                                    label = { Text("Local") },
+                                    modifier = Modifier.weight(1f)
                                 )
                                 FilterChip(
                                     selected = sttMode == "cloud",
@@ -271,15 +272,15 @@ private fun MainScreen(
                                             putString("stt_mode", "cloud"); apply()
                                         }
                                     },
-                                    label = { Text("Cloud (OpenAI Whisper)") }
+                                    label = { Text("Cloud") },
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
                     )
 
-                    // Dynamic content based on mode
+                    // Local mode: model management + threads
                     if (sttMode == "local") {
-                        // Active Model (compact)
                         val activeLabel =
                             if (activeModel.isEmpty()) "Default (bundled)" else activeModel
                         ListItem(
@@ -292,7 +293,6 @@ private fun MainScreen(
                             modifier = Modifier.clickable { showModelDialog = true }
                         )
 
-                        // Download Models
                         ListItem(
                             headlineContent = { Text("Manage Models") },
                             leadingContent = { Icon(Icons.Outlined.Download, null) },
@@ -363,7 +363,6 @@ private fun MainScreen(
                             }
                         )
 
-                        // Threads slider (only relevant for local)
                         ListItem(
                             headlineContent = { Text(stringResource(R.string.num_threads_option)) },
                             leadingContent = { Icon(Icons.Outlined.Memory, null) },
@@ -395,26 +394,77 @@ private fun MainScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
-                    } else {
-                        // Cloud mode — references AI Provider key
-                        val providerName = if (aiProvider == "gemini") "Gemini" else "OpenAI"
-                        val hasKey = if (aiProvider == "gemini") geminiApiKey.isNotEmpty() else openaiApiKey.isNotEmpty()
-                        ListItem(
-                            headlineContent = { Text("Cloud Transcription") },
-                            leadingContent = {
-                                Icon(
-                                    if (hasKey) Icons.Outlined.CheckCircle else Icons.Outlined.Key,
-                                    null,
-                                    tint = if (hasKey) Color(0xFF4CAF50)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            supportingContent = {
+                    }
+
+                    // AI Provider picker (always visible — powers Cloud STT + Magic Rewrite)
+                    ListItem(
+                        headlineContent = { Text("AI Provider") },
+                        leadingContent = { Icon(Icons.Outlined.Key, null) },
+                        supportingContent = {
+                            Column {
                                 Text(
-                                    if (hasKey) "Using $providerName API key for transcription"
-                                    else "Set your $providerName API key in AI Provider below"
+                                    "Powers Cloud STT and Magic Rewrite",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    FilterChip(
+                                        selected = aiProvider == "gemini",
+                                        onClick = {
+                                            aiProvider = "gemini"
+                                            with(sharedPref.edit()) {
+                                                putString("ai_provider", "gemini"); apply()
+                                            }
+                                        },
+                                        label = { Text("Gemini") },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    FilterChip(
+                                        selected = aiProvider == "openai",
+                                        onClick = {
+                                            aiProvider = "openai"
+                                            with(sharedPref.edit()) {
+                                                putString("ai_provider", "openai"); apply()
+                                            }
+                                        },
+                                        label = { Text("OpenAI") },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
+                        }
+                    )
+                    // API key field for selected provider
+                    if (aiProvider == "gemini") {
+                        ApiKeyField(
+                            label = "Gemini API Key",
+                            value = geminiApiKey,
+                            placeholder = "AIza...",
+                            onValueChange = {
+                                geminiApiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("gemini_api_key", it); apply()
+                                }
+                            },
+                            onVerify = { ApiKeyValidator.validateGemini(it) }
+                        )
+                    } else {
+                        ApiKeyField(
+                            label = "OpenAI API Key",
+                            value = openaiApiKey,
+                            placeholder = "sk-...",
+                            onValueChange = {
+                                openaiApiKey = it
+                                with(sharedPref.edit()) {
+                                    putString("openai_api_key", it); apply()
+                                }
+                            },
+                            onVerify = { ApiKeyValidator.validateOpenAI(it) }
                         )
                     }
                 }
@@ -456,80 +506,6 @@ private fun MainScreen(
                         },
                         confirmButton = {}
                     )
-                }
-            }
-
-            // ── AI Provider (unified: powers Cloud STT + Magic Rewrite) ──
-            item {
-                SectionCard(title = "AI Provider") {
-                    ListItem(
-                        headlineContent = { Text("Cloud AI Services") },
-                        leadingContent = { Icon(Icons.Outlined.Key, null) },
-                        supportingContent = {
-                            Text("Your API key powers Cloud STT and Magic Rewrite. Swipe right on the keyboard to access rewrite styles.")
-                        }
-                    )
-                    // Provider picker
-                    ListItem(
-                        headlineContent = { Text("Provider") },
-                        supportingContent = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(
-                                    selected = aiProvider == "gemini",
-                                    onClick = {
-                                        aiProvider = "gemini"
-                                        with(sharedPref.edit()) {
-                                            putString("ai_provider", "gemini"); apply()
-                                        }
-                                    },
-                                    label = { Text("Gemini") }
-                                )
-                                FilterChip(
-                                    selected = aiProvider == "openai",
-                                    onClick = {
-                                        aiProvider = "openai"
-                                        with(sharedPref.edit()) {
-                                            putString("ai_provider", "openai"); apply()
-                                        }
-                                    },
-                                    label = { Text("OpenAI") }
-                                )
-                            }
-                        }
-                    )
-                    // Single API key field for selected provider
-                    if (aiProvider == "gemini") {
-                        ApiKeyField(
-                            label = "Gemini API Key",
-                            value = geminiApiKey,
-                            placeholder = "AIza...",
-                            onValueChange = {
-                                geminiApiKey = it
-                                with(sharedPref.edit()) {
-                                    putString("gemini_api_key", it); apply()
-                                }
-                            },
-                            onVerify = { ApiKeyValidator.validateGemini(it) }
-                        )
-                    } else {
-                        ApiKeyField(
-                            label = "OpenAI API Key",
-                            value = openaiApiKey,
-                            placeholder = "sk-...",
-                            onValueChange = {
-                                openaiApiKey = it
-                                with(sharedPref.edit()) {
-                                    putString("openai_api_key", it); apply()
-                                }
-                            },
-                            onVerify = { ApiKeyValidator.validateOpenAI(it) }
-                        )
-                    }
                 }
             }
 
