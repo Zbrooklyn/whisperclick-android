@@ -103,7 +103,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel) {
     MainScreen(
-        canTranscribe = viewModel.canTranscribe,
         isRecording = viewModel.isRecording,
         messageLog = viewModel.dataLog,
         onBenchmarkTapped = viewModel::benchmark,
@@ -114,7 +113,6 @@ fun MainScreen(viewModel: MainScreenViewModel) {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 private fun MainScreen(
-    canTranscribe: Boolean,
     isRecording: Boolean,
     messageLog: String,
     onBenchmarkTapped: () -> Unit,
@@ -620,9 +618,8 @@ private fun MainScreen(
                     expanded = debugExpanded,
                     onToggle = { debugExpanded = !debugExpanded }
                 ) {
-                    BenchmarkButton(enabled = canTranscribe, onClick = onBenchmarkTapped)
+                    BenchmarkButton(onClick = onBenchmarkTapped)
                     RecordButton(
-                        enabled = canTranscribe,
                         isRecording = isRecording,
                         onClick = onRecordTapped
                     )
@@ -1252,20 +1249,20 @@ private fun ApiKeyField(
 // ── Testing items ──
 
 @Composable
-private fun BenchmarkButton(enabled: Boolean, onClick: () -> Unit) {
+private fun BenchmarkButton(onClick: () -> Unit) {
     ListItem(
         leadingContent = {
             Icon(Icons.Outlined.Speed, stringResource(R.string.start_recording))
         },
         headlineContent = { Text(stringResource(R.string.benchmark)) },
         supportingContent = { Text(stringResource(R.string.benchmark_description)) },
-        modifier = Modifier.clickable(onClick = onClick, enabled = enabled)
+        modifier = Modifier.clickable(onClick = onClick)
     )
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun RecordButton(enabled: Boolean, isRecording: Boolean, onClick: () -> Unit) {
+private fun RecordButton(isRecording: Boolean, onClick: () -> Unit) {
     val micPermissionState = rememberPermissionState(
         permission = android.Manifest.permission.RECORD_AUDIO,
         onPermissionResult = { granted ->
@@ -1293,6 +1290,6 @@ private fun RecordButton(enabled: Boolean, isRecording: Boolean, onClick: () -> 
             } else {
                 micPermissionState.launchPermissionRequest()
             }
-        }, enabled = enabled)
+        })
     )
 }
