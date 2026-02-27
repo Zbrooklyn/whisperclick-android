@@ -812,51 +812,53 @@ private fun AppLogContent() {
     val logText by AppLog.log.collectAsState()
     val context = LocalContext.current
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            "Activity Log",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        TextButton(
-            onClick = {
-                val clipboard =
-                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText("WhisperClick Log", logText)
-                )
-                Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
-            },
-            contentPadding = ButtonDefaults.TextButtonContentPadding
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("Copy", fontSize = 12.sp)
+            Text(
+                "Activity Log",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = {
+                    val clipboard =
+                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("WhisperClick Log", logText)
+                    )
+                    Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
+                },
+                contentPadding = ButtonDefaults.TextButtonContentPadding
+            ) {
+                Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Copy", fontSize = 12.sp)
+            }
+            TextButton(
+                onClick = { AppLog.clear() },
+                contentPadding = ButtonDefaults.TextButtonContentPadding
+            ) {
+                Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Clear", fontSize = 12.sp)
+            }
         }
-        TextButton(
-            onClick = { AppLog.clear() },
-            contentPadding = ButtonDefaults.TextButtonContentPadding
-        ) {
-            Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("Clear", fontSize = 12.sp)
+        SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Text(
+                text = logText.ifEmpty { "(no log entries yet)" },
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-    }
-    SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Text(
-            text = logText.ifEmpty { "(no log entries yet)" },
-            fontSize = 11.sp,
-            lineHeight = 15.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -868,65 +870,67 @@ private fun CrashLogContent() {
     var crashCount by remember { mutableStateOf(CrashLogger.getCrashCount()) }
     val crashText = remember(crashCount) { CrashLogger.getLatestCrash() ?: "" }
 
-    if (crashCount == 0) {
-        Text(
-            "(no crashes recorded)",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-        return
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            "Latest Crash",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.weight(1f)
-        )
-        TextButton(
-            onClick = {
-                val clipboard =
-                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val text = CrashLogger.getLatestCrash() ?: ""
-                clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
-                Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
-            },
-            contentPadding = ButtonDefaults.TextButtonContentPadding
-        ) {
-            Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("Copy", fontSize = 12.sp)
-        }
-        TextButton(
-            onClick = {
-                CrashLogger.clearAll()
-                crashCount = 0
-            },
-            contentPadding = ButtonDefaults.TextButtonContentPadding
-        ) {
-            Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("Clear", fontSize = 12.sp)
-        }
-    }
-
-    if (crashText.isNotEmpty()) {
-        SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+    Column {
+        if (crashCount == 0) {
             Text(
-                text = crashText,
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "(no crashes recorded)",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
+            return
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Latest Crash",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = {
+                    val clipboard =
+                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val text = CrashLogger.getLatestCrash() ?: ""
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
+                    Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
+                },
+                contentPadding = ButtonDefaults.TextButtonContentPadding
+            ) {
+                Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Copy", fontSize = 12.sp)
+            }
+            TextButton(
+                onClick = {
+                    CrashLogger.clearAll()
+                    crashCount = 0
+                },
+                contentPadding = ButtonDefaults.TextButtonContentPadding
+            ) {
+                Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Clear", fontSize = 12.sp)
+            }
+        }
+
+        if (crashText.isNotEmpty()) {
+            SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Text(
+                    text = crashText,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
