@@ -20,9 +20,10 @@
 -keep class com.nefeshcore.whisperclick.VoiceKeyboardView { *; }
 
 # --- Compose ---
-# Compose compiler generates classes that shouldn't be renamed
--dontwarn androidx.compose.**
--keep class androidx.compose.** { *; }
+# Compose compiler plugin handles its own keep rules.
+# Only suppress known false-positive warnings.
+-dontwarn androidx.compose.material.**
+-dontwarn androidx.compose.ui.**
 
 # --- Kotlin metadata (needed for reflection and Compose) ---
 -keepattributes *Annotation*
@@ -30,8 +31,8 @@
 -keep class kotlin.Metadata { *; }
 
 # --- Coroutines ---
--dontwarn kotlinx.coroutines.**
--keep class kotlinx.coroutines.** { *; }
+# Only suppress the specific ServiceLoader warning (false positive)
+-dontwarn kotlinx.coroutines.internal.MainDispatcherLoader
 
 # --- Accompanist ---
 -dontwarn com.google.accompanist.**

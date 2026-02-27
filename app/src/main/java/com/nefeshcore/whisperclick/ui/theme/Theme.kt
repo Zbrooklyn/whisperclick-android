@@ -58,7 +58,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun KaiboardTheme(themeMode: String = "dark", content: @Composable () -> Unit) {
+fun WhisperClickTheme(themeMode: String = "dark", content: @Composable () -> Unit) {
     val colorScheme = when (themeMode) {
         "light" -> LightColorScheme
         "oled" -> OledColorScheme

@@ -52,7 +52,10 @@ object ModelManager {
 
     fun getDownloadedModels(context: Context): List<String> {
         val dir = getModelsDir(context)
-        return dir.listFiles()?.map { it.name } ?: emptyList()
+        return dir.listFiles()
+            ?.filter { !it.name.endsWith(".tmp") }
+            ?.map { it.name }
+            ?: emptyList()
     }
 
     fun getBundledModels(context: Context): List<String> {
@@ -140,7 +143,9 @@ object ModelManager {
             }
             input.close()
 
-            tempFile.renameTo(destFile)
+            if (!tempFile.renameTo(destFile)) {
+                throw java.io.IOException("Failed to move downloaded file to ${destFile.absolutePath}")
+            }
             _progress.value = DownloadProgress()
             AppLog.log("Model", "${model.name} downloaded successfully")
             true

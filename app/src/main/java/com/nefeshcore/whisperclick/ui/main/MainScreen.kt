@@ -68,6 +68,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -159,6 +160,22 @@ private fun MainScreen(
     var showModelDialog by remember { mutableStateOf(false) }
     var debugExpanded by remember { mutableStateOf(false) }
 
+    // Sync settings when changed externally (e.g., keyboard service toggles STT mode)
+    DisposableEffect(sharedPref) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            when (key) {
+                "stt_mode" -> sttMode = prefs.getString("stt_mode", "local") ?: "local"
+                "ai_provider" -> aiProvider = prefs.getString("ai_provider", "gemini") ?: "gemini"
+                "theme_mode" -> themeMode = prefs.getString("theme_mode", "dark") ?: "dark"
+                "active_model" -> activeModel = prefs.getString("active_model", "") ?: ""
+                "gemini_api_key" -> geminiApiKey = prefs.getString("gemini_api_key", "") ?: ""
+                "openai_api_key" -> openaiApiKey = prefs.getString("openai_api_key", "") ?: ""
+            }
+        }
+        sharedPref.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { sharedPref.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     val versionName = BuildConfig.VERSION_NAME
 
     Scaffold(
@@ -205,7 +222,10 @@ private fun MainScreen(
         ) {
             // Status chip
             item {
-                val activeLabel = if (activeModel.isEmpty()) "tiny.en" else activeModel
+                val activeLabel = if (activeModel.isEmpty()) "Tiny English" else {
+                    ModelManager.availableModels.firstOrNull { it.fileName == activeModel }?.name
+                        ?: activeModel
+                }
                 val modeLabel = if (sttMode == "cloud") "Cloud" else "Local"
                 Row(
                     modifier = Modifier
@@ -583,7 +603,8 @@ private fun MainScreen(
                                                 putString("theme_mode", key); apply()
                                             }
                                         },
-                                        label = { Text(label) }
+                                        label = { Text(label) },
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
                             }
@@ -794,7 +815,7 @@ private fun AppLogContent() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -802,34 +823,31 @@ private fun AppLogContent() {
             "Activity Log",
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
         )
-        Row {
-            IconButton(
-                onClick = {
-                    val clipboard =
-                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(
-                        ClipData.newPlainText("WhisperClick Log", logText)
-                    )
-                    Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Outlined.ContentCopy, "Copy log",
-                    modifier = Modifier.size(16.dp)
+        TextButton(
+            onClick = {
+                val clipboard =
+                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("WhisperClick Log", logText)
                 )
-            }
-            IconButton(
-                onClick = { AppLog.clear() },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Outlined.Delete, "Clear log",
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+                Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
+            },
+            contentPadding = ButtonDefaults.TextButtonContentPadding
+        ) {
+            Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Copy", fontSize = 12.sp)
+        }
+        TextButton(
+            onClick = { AppLog.clear() },
+            contentPadding = ButtonDefaults.TextButtonContentPadding
+        ) {
+            Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Clear", fontSize = 12.sp)
         }
     }
     SelectionContainer(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -848,7 +866,7 @@ private fun AppLogContent() {
 private fun CrashLogContent() {
     val context = LocalContext.current
     var crashCount by remember { mutableStateOf(CrashLogger.getCrashCount()) }
-    val crashText = remember { CrashLogger.getLatestCrash() ?: "" }
+    val crashText = remember(crashCount) { CrashLogger.getLatestCrash() ?: "" }
 
     if (crashCount == 0) {
         Text(
@@ -863,23 +881,41 @@ private fun CrashLogContent() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.End
+            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = {
-            val clipboard =
-                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val text = CrashLogger.getLatestCrash() ?: ""
-            clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
-            Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
-        }) {
-            Icon(Icons.Outlined.ContentCopy, "Copy crash", modifier = Modifier.size(18.dp))
+        Text(
+            "Latest Crash",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(
+            onClick = {
+                val clipboard =
+                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val text = CrashLogger.getLatestCrash() ?: ""
+                clipboard.setPrimaryClip(ClipData.newPlainText("Crash Log", text))
+                Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
+            },
+            contentPadding = ButtonDefaults.TextButtonContentPadding
+        ) {
+            Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Copy", fontSize = 12.sp)
         }
-        IconButton(onClick = {
-            CrashLogger.clearAll()
-            crashCount = 0
-        }) {
-            Icon(Icons.Outlined.Delete, "Clear crashes", modifier = Modifier.size(18.dp))
+        TextButton(
+            onClick = {
+                CrashLogger.clearAll()
+                crashCount = 0
+            },
+            contentPadding = ButtonDefaults.TextButtonContentPadding
+        ) {
+            Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Clear", fontSize = 12.sp)
         }
     }
 

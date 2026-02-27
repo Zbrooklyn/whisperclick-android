@@ -32,59 +32,57 @@ object OpenAIClient : RewriteProvider {
 
     override suspend fun rewriteAll(apiKey: String, originalText: String): RewriteVariants {
         return withContext(Dispatchers.IO) {
-            try {
-                val systemPrompt = "You are a writing assistant. Return ONLY valid JSON with no markdown, no code fences, just the raw JSON object."
-                val userPrompt = """Rewrite the following text in 5 styles.
+            val systemPrompt = "You are a writing assistant. Return ONLY valid JSON with no markdown, no code fences, just the raw JSON object."
+            val userPrompt = """Rewrite the following text in 5 styles.
 
 Keys: "clean" (fix spelling, grammar, punctuation only), "professional", "casual", "concise", "emojify" (add relevant emojis).
 
 All style variants must be based on the clean version, not the original.
 
-Text: "$originalText""""
+---BEGIN USER TEXT---
+$originalText
+---END USER TEXT---"""
 
-                val response = callApi(apiKey, systemPrompt, userPrompt)
-                if (response != null) {
-                    parseVariants(response, originalText)
-                } else {
-                    fallbackVariants(originalText)
-                }
-            } catch (e: Exception) {
-                AppLog.log("OpenAI", "rewriteAll ERROR: ${e.javaClass.simpleName}: ${e.message}")
-                fallbackVariants(originalText)
-            }
+            val response = callApi(apiKey, systemPrompt, userPrompt)
+                ?: throw Exception("OpenAI API returned no response")
+            parseVariants(response, originalText)
         }
     }
 
     private fun callApi(apiKey: String, systemPrompt: String, userPrompt: String): String? {
         val url = URL(API_URL)
         val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.setRequestProperty("Authorization", "Bearer $apiKey")
-        connection.connectTimeout = 15000
-        connection.readTimeout = 30000
-        connection.doOutput = true
+        try {
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Authorization", "Bearer $apiKey")
+            connection.connectTimeout = 15000
+            connection.readTimeout = 30000
+            connection.doOutput = true
 
-        val messages = JSONArray()
-        messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
-        messages.put(JSONObject().put("role", "user").put("content", userPrompt))
+            val messages = JSONArray()
+            messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
+            messages.put(JSONObject().put("role", "user").put("content", userPrompt))
 
-        val jsonBody = JSONObject()
-        jsonBody.put("model", "gpt-4o-mini")
-        jsonBody.put("messages", messages)
+            val jsonBody = JSONObject()
+            jsonBody.put("model", "gpt-4o-mini")
+            jsonBody.put("messages", messages)
 
-        val writer = OutputStreamWriter(connection.outputStream)
-        writer.write(jsonBody.toString())
-        writer.flush()
+            val writer = OutputStreamWriter(connection.outputStream)
+            writer.write(jsonBody.toString())
+            writer.flush()
 
-        val responseCode = connection.responseCode
-        return if (responseCode == 200) {
-            val response = connection.inputStream.bufferedReader().use { it.readText() }
-            parseResponse(response)
-        } else {
-            val errorBody = try { connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "no body" } catch (_: Exception) { "unreadable" }
-            AppLog.log("OpenAI", "HTTP $responseCode: $errorBody")
-            null
+            val responseCode = connection.responseCode
+            return if (responseCode == 200) {
+                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                parseResponse(response)
+            } else {
+                val errorBody = try { connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "no body" } catch (_: Exception) { "unreadable" }
+                AppLog.log("OpenAI", "HTTP $responseCode: $errorBody")
+                null
+            }
+        } finally {
+            connection.disconnect()
         }
     }
 

@@ -82,14 +82,24 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         // Reload model if it was released when keyboard was hidden
         if (whisperContext == null && !isModelLoading) {
             isModelLoading = true
+            releaseAfterLoad = false
             scope.launch {
                 try {
                     loadBaseModel()
-                    canTranscribe = true
+                    if (releaseAfterLoad) {
+                        // Keyboard was hidden while loading — release immediately
+                        whisperContext?.release()
+                        whisperContext = null
+                        canTranscribe = false
+                        AppLog.log("Keyboard", "Model released (keyboard hidden during load)")
+                    } else {
+                        canTranscribe = true
+                    }
                 } catch (e: Exception) {
                     Log.w(LOG_TAG, "Failed to reload model", e)
                 }
                 isModelLoading = false
+                releaseAfterLoad = false
             }
         }
     }
@@ -98,11 +108,17 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         super.onFinishInputView(finishingInput)
         // Unload model from RAM when keyboard is hidden
         if (!isRecording && !isTranscribing) {
-            scope.launch {
-                whisperContext?.release()
-                whisperContext = null
-                canTranscribe = false
-                AppLog.log("Keyboard", "Model unloaded (keyboard hidden)")
+            if (isModelLoading) {
+                // Model still loading — flag it for release once load completes
+                releaseAfterLoad = true
+                AppLog.log("Keyboard", "Model loading — will release after load completes")
+            } else {
+                scope.launch {
+                    whisperContext?.release()
+                    whisperContext = null
+                    canTranscribe = false
+                    AppLog.log("Keyboard", "Model unloaded (keyboard hidden)")
+                }
             }
         }
     }
@@ -162,6 +178,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
             CoroutineScope(Dispatchers.Default).launch { ctx.release() }
         }
         clipboardManager?.removePrimaryClipChangedListener(clipListener)
+        recorder.release()
         job.cancel()
         handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
@@ -257,14 +274,18 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     }
 
     fun undoRewrite() {
+        haptic()
         val ic = currentInputConnection ?: return
         val original = preRewriteText ?: return
-        val currentText = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
-        if (currentText.isNotEmpty()) {
-            ic.deleteSurroundingText(currentText.length, 0)
-            ic.commitText(original, 1)
-            AppLog.log("Rewrite", "Undone")
+        // Verify the rewrite text is still what's before the cursor
+        val beforeCursor = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
+        if (beforeCursor.isEmpty()) {
+            preRewriteText = null
+            return
         }
+        ic.deleteSurroundingText(beforeCursor.length, 0)
+        ic.commitText(original, 1)
+        AppLog.log("Rewrite", "Undone")
         preRewriteText = null
     }
 
@@ -355,42 +376,6 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         sharedPref?.edit()?.putString("clipboard_history", arr.toString())?.apply()
     }
 
-    // Legacy single-style rewrite (kept for compatibility)
-    fun performRewrite(style: String) {
-        AppLog.log("Rewrite", "Triggered: style=$style")
-        val ic = currentInputConnection ?: run {
-            AppLog.log("Rewrite", "ERROR: No InputConnection")
-            return
-        }
-        val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
-        if (textBefore.isEmpty()) {
-            AppLog.log("Rewrite", "No text to rewrite")
-            return
-        }
-
-        val (client, apiKey) = getRewriteClient()
-        if (apiKey.isEmpty()) {
-            AppLog.log("Rewrite", "ERROR: ${client.name} API Key not set")
-            return
-        }
-
-        scope.launch {
-            AppLog.log("Rewrite", "Calling ${client.name} API...")
-            val start = System.currentTimeMillis()
-            val rewritten = client.rewriteText(apiKey, textBefore, style)
-            val elapsed = System.currentTimeMillis() - start
-
-            if (rewritten.isNotEmpty() && rewritten != textBefore) {
-                AppLog.log("Rewrite", "Done (${elapsed}ms): ${rewritten.take(80)}${if (rewritten.length > 80) "..." else ""}")
-                withContext(Dispatchers.Main) {
-                    ic.deleteSurroundingText(textBefore.length, 0)
-                    ic.commitText(rewritten, 1)
-                }
-            } else {
-                AppLog.log("Rewrite", "No change returned (${elapsed}ms)")
-            }
-        }
-    }
     // -----------------------------
 
     // SaveStateRegistry Methods
@@ -407,13 +392,17 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     var isTranscribing by mutableStateOf(false)
         private set
     private var transcriptionJob: Job? = null
+    @Volatile
     private var isModelLoading = false
+    @Volatile
+    private var releaseAfterLoad = false
     var useCloudStt by mutableStateOf(false)
         private set
     private var modelsPath: File? = null
     private var samplesPath: File? = null
     private var sharedPref: SharedPreferences? = null
     private val maxThreads = Runtime.getRuntime().availableProcessors()
+    private val defaultThreads = (maxThreads - 1).coerceAtLeast(1)
     private var trailing: String? = null
 
     private fun checkBoolPref(resource: Int): Boolean? {
@@ -445,9 +434,6 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
     private suspend fun copyAssets() = withContext(Dispatchers.IO) {
         modelsPath?.mkdirs()
         samplesPath?.mkdirs()
-        //application.copyData("models", modelsPath, ::printMessage)
-        //samplesPath?.let { application.copyData("samples", it, ::printMessage) }
-        printMessage("All data copied to working directory.\n")
     }
 
     private suspend fun loadBaseModel() = withContext(Dispatchers.IO) {
@@ -480,16 +466,17 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         if (samples.isEmpty()) return null
         val data = decodeShortArray(samples, 1)
         val nThreads =
-            sharedPref?.getInt(application.getString(R.string.num_threads), maxThreads)
+            sharedPref?.getInt(application.getString(R.string.num_threads), defaultThreads)
         val durationMs = samples.size / (16000 / 1000)
         printMessage("Transcribing ${durationMs}ms of audio...\n")
         val start = System.currentTimeMillis()
-        var text = whisperContext?.transcribeData(data, false, nThreads ?: maxThreads)?.trim()
+        var text = whisperContext?.transcribeData(data, false, nThreads ?: defaultThreads)?.trim()
             ?: return null
-        // remove special tokens like [MUSIC] or [BLANK_AUDIO]
-        text = text.replace(Regex("""\[[-_a-zA-Z0-9 ]*]"""), "")
-        text = text.replace(Regex("""\*[-_a-zA-Z0-9 ]*\*"""), "")
-        text = text.replace(Regex("""\([-_a-zA-Z0-9 ]*\)"""), "")
+        // Strip whisper special tokens (e.g. [MUSIC], [BLANK_AUDIO])
+        // Only all-caps to avoid stripping valid text like [John] or [1]
+        text = text.replace(Regex("""\[[A-Z][A-Z_0-9 ]*]"""), "")
+        text = text.replace(Regex("""\*[A-Z][A-Z_ ]*\*"""), "")
+        text = text.replace(Regex("""\([A-Z][A-Z_ ]*\)"""), "")
         if (checkBoolPref(R.string.casual_mode) == true) {
             text = text.trim().lowercase()
             if (text.isNotEmpty() && text.last() in charArrayOf('.', ',', ';')) {
@@ -501,12 +488,30 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
         return text.ifEmpty { null }
     }
 
+    var isCancellingTranscription by mutableStateOf(false)
+        private set
+
     fun cancelTranscription() {
-        transcriptionJob?.cancel()
-        transcriptionJob = null
-        isTranscribing = false
-        canTranscribe = true
-        AppLog.log("Keyboard", "Transcription cancelled")
+        trailing = null
+        val job = transcriptionJob
+        if (job != null) {
+            job.cancel()
+            if (useCloudStt) {
+                // Cloud STT is interruptible — cancel immediately
+                transcriptionJob = null
+                isTranscribing = false
+                isCancellingTranscription = false
+                canTranscribe = true
+                AppLog.log("Keyboard", "Transcription cancelled")
+            } else {
+                // Local whisper.cpp is not interruptible — show honest state
+                isCancellingTranscription = true
+                AppLog.log("Keyboard", "Cancelling transcription (waiting for native code)...")
+            }
+        } else {
+            isTranscribing = false
+            canTranscribe = true
+        }
     }
 
     fun cancelRecord() = scope.launch {
@@ -542,8 +547,10 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                     transcriptionJob = scope.launch {
                         try {
                             val text = if (useCloudStt) transcribeCloud(samples) else transcribe(samples)
-                            if (text != null) {
-                                ic?.commitText(text + (trailing ?: ""), 1)
+                            // Only commit if not cancelled (native code runs to completion)
+                            if (text != null && !isCancellingTranscription) {
+                                val freshIc = currentInputConnection
+                                freshIc?.commitText(text + (trailing ?: ""), 1)
                             }
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             AppLog.log("Keyboard", "Transcription job cancelled")
@@ -552,6 +559,7 @@ class VoiceKeyboardInputMethodService : InputMethodService(), LifecycleOwner,
                             printMessage("Transcription error: ${e.localizedMessage}\n")
                         } finally {
                             isTranscribing = false
+                            isCancellingTranscription = false
                             canTranscribe = true
                             transcriptionJob = null
                         }

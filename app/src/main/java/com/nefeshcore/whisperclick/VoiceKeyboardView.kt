@@ -36,7 +36,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
-import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Close
@@ -87,7 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
-import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
+import com.nefeshcore.whisperclick.ui.theme.WhisperClickTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -121,7 +120,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
             prefs.registerOnSharedPreferenceChangeListener(listener)
             onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
-        KaiboardTheme(themeMode = themeMode) {
+        WhisperClickTheme(themeMode = themeMode) {
             // Height calculated in layout phase (not composition) to avoid per-frame recomposition jitter
             val keyboardHeightDp = if (showEditRow) 96.dp else 56.dp
             val panelHeightDp = 300.dp
@@ -192,6 +191,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                     enabled = service.canTranscribe,
                     isRecording = service.isRecording,
                     isTranscribing = service.isTranscribing,
+                    isCancelling = service.isCancellingTranscription,
                     isCloudMode = service.useCloudStt,
                     onClick = { service.haptic(); service.toggleRecord() },
                     onCancel = { service.haptic(); service.cancelTranscription() },
@@ -297,7 +297,7 @@ class VoiceKeyboardView(private val service: VoiceKeyboardInputMethodService) :
                         Icon(Icons.Outlined.Redo, "Redo")
                     }
                     // Clipboard history — jumps to page 2
-                    EditButton(onClick = { onNavigateToClipboard() }) {
+                    EditButton(onClick = { service.haptic(); onNavigateToClipboard() }) {
                         Icon(Icons.Outlined.Assignment, "Clipboard History")
                     }
                     // Small settings button
@@ -820,6 +820,7 @@ private fun RecordButton(
     enabled: Boolean,
     isRecording: Boolean,
     isTranscribing: Boolean,
+    isCancelling: Boolean,
     isCloudMode: Boolean,
     onClick: () -> Unit,
     onCancel: () -> Unit,
@@ -827,7 +828,6 @@ private fun RecordButton(
     modifier: Modifier,
     shape: Shape
 ) {
-    var firstRender by remember { mutableStateOf(true) }
     var seconds by remember { mutableIntStateOf(0) }
     var recordingStartTime by remember { mutableLongStateOf(0L) }
 
@@ -868,8 +868,8 @@ private fun RecordButton(
         }
     }
 
-    // Pulse animation during active states (recording / transcribing)
-    val isActive = isRecording || isTranscribing
+    // Pulse animation during active states (recording / transcribing) — not when cancelling
+    val isActive = (isRecording || isTranscribing) && !isCancelling
     val pulseAlpha = if (isActive) {
         val transition = rememberInfiniteTransition(label = "pulse")
         val alpha by transition.animateFloat(
@@ -887,48 +887,61 @@ private fun RecordButton(
     Button(
         onClick = {
             if (longPressTriggered) return@Button
+            if (isCancelling) return@Button
             if (currentIsTranscribing) {
                 currentOnCancel()
                 return@Button
             }
             currentOnClick()
         },
-        enabled = enabled || isTranscribing,
+        enabled = enabled || isTranscribing || isCancelling,
         interactionSource = interactionSource,
         modifier = modifier.graphicsLayer { alpha = pulseAlpha },
         shape = shape
     ) {
         val iconSize = 28.dp
         val textSize = 18.sp
-        if (isTranscribing) {
-            firstRender = false
-            Icon(Icons.Outlined.Close, "Cancel", modifier = Modifier.defaultMinSize(iconSize, iconSize))
-            Text(" Cancel", fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
-                modifier = Modifier.basicMarquee())
-        } else if (!enabled && firstRender) {
-            Icon(
-                Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
-                modifier = Modifier.defaultMinSize(iconSize, iconSize)
-            )
-        } else if (!enabled) {
-            firstRender = false
-            Text(stringResource(R.string.transcribing), fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
-                modifier = Modifier.basicMarquee())
-        } else if (isRecording) {
-            firstRender = false
-            Icon(Icons.Outlined.Stop, stringResource(R.string.stop_recording),
-                modifier = Modifier.defaultMinSize(iconSize, iconSize))
-            Text(
-                " %d:%02d".format(seconds / 60, seconds % 60),
-                fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip
-            )
-        } else {
-            if (isCloudMode) {
-                Icon(Icons.Outlined.Cloud, "Cloud STT",
+        when {
+            isCancelling -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(iconSize),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Text(" Finishing\u2026", fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                    modifier = Modifier.basicMarquee())
+            }
+            isTranscribing -> {
+                Icon(Icons.Outlined.Close, "Cancel", modifier = Modifier.defaultMinSize(iconSize, iconSize))
+                Text(" Cancel", fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                    modifier = Modifier.basicMarquee())
+            }
+            isRecording -> {
+                Icon(Icons.Outlined.Stop, stringResource(R.string.stop_recording),
                     modifier = Modifier.defaultMinSize(iconSize, iconSize))
-            } else {
-                Icon(Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
+                Text(
+                    " %d:%02d".format(seconds / 60, seconds % 60),
+                    fontSize = textSize, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip
+                )
+            }
+            enabled -> {
+                if (isCloudMode) {
+                    Icon(Icons.Outlined.Cloud, "Cloud STT",
+                        modifier = Modifier.defaultMinSize(iconSize, iconSize))
+                } else {
+                    Icon(Icons.Outlined.KeyboardVoice, stringResource(R.string.start_recording),
+                        modifier = Modifier.defaultMinSize(iconSize, iconSize))
+                }
+            }
+            else -> {
+                // Model loading — show mic icon with small spinner
+                Icon(Icons.Outlined.KeyboardVoice, "Loading",
                     modifier = Modifier.defaultMinSize(iconSize, iconSize))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
+                )
             }
         }
     }

@@ -18,7 +18,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.nefeshcore.whisperclick.ui.main.MainScreen
 import com.nefeshcore.whisperclick.ui.main.MainScreenViewModel
-import com.nefeshcore.whisperclick.ui.theme.KaiboardTheme
+import com.nefeshcore.whisperclick.ui.theme.WhisperClickTheme
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainScreenViewModel by viewModels { MainScreenViewModel.factory() }
@@ -42,14 +42,14 @@ class MainActivity : ComponentActivity() {
                 onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
             }
 
-            KaiboardTheme(themeMode = themeMode) {
+            WhisperClickTheme(themeMode = themeMode) {
                 // Sync system bar colors with theme
                 val view = LocalView.current
                 val bgColor = androidx.compose.material3.MaterialTheme.colorScheme.background.toArgb()
                 val isLight = themeMode == "light"
                 if (!view.isInEditMode) {
                     SideEffect {
-                        val window = (view.context as Activity).window
+                        val window = (view.context as? Activity)?.window ?: return@SideEffect
                         window.statusBarColor = bgColor
                         window.navigationBarColor = bgColor
                         WindowCompat.getInsetsController(window, view).apply {

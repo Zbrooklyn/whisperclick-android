@@ -46,7 +46,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     init {
         viewModelScope.launch {
             printSystemInfo()
-            loadModel()
         }
     }
 
@@ -54,19 +53,23 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
         printMessage(String.format("System Info: %s\n", WhisperContext.getSystemInfo()))
     }
 
-    private suspend fun loadModel() {
-        printMessage("Loading...\n")
-        try {
+    private suspend fun ensureModelLoaded(): Boolean {
+        if (whisperContext != null) return true
+        printMessage("Loading model...\n")
+        return try {
             loadBaseModel()
             canTranscribe = true
+            true
         } catch (e: Exception) {
             Log.w(LOG_TAG, e)
-            printMessage("${e.localizedMessage}\n")
+            printMessage("Failed to load: ${e.localizedMessage}\n")
+            false
         }
     }
 
     private suspend fun printMessage(msg: String) = withContext(Dispatchers.Main) {
         dataLog += msg
+        if (dataLog.length > 10000) dataLog = dataLog.takeLast(8000)
         AppLog.log("Settings", msg.trimEnd('\n'))
     }
 
@@ -84,6 +87,7 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     }
 
     fun benchmark() = viewModelScope.launch {
+        if (!ensureModelLoaded()) return@launch
         val nThreads = sharedPref.getInt(application.getString(R.string.num_threads), maxThreads)
         runBenchmark(nThreads)
     }
@@ -152,6 +156,7 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
                     canTranscribe = true
                 }
             } else {
+                if (!ensureModelLoaded()) return@launch
                 stopPlayback()
                 val file = getTempFileForRecording()
                 recorder.startRecording { e ->

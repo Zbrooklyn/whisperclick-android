@@ -11,9 +11,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class Recorder {
-    private val scope = CoroutineScope(
-        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    )
+    private val executor = Executors.newSingleThreadExecutor()
+    private val scope = CoroutineScope(executor.asCoroutineDispatcher())
     private var thread: AudioCaptureThread? = null
 
     suspend fun startRecording(onError: (Exception) -> Unit) = withContext(scope.coroutineContext) {
@@ -28,6 +27,10 @@ class Recorder {
         t.join()
         thread = null
         t.getSamples()
+    }
+
+    fun release() {
+        executor.shutdownNow()
     }
 }
 
@@ -58,7 +61,7 @@ private class AudioCaptureThread(
 
             try {
                 audioRecord.startRecording()
-                while (!quit.get()) {
+                while (!quit.get() && totalSamples < MAX_SAMPLES) {
                     val read = audioRecord.read(buffer, 0, buffer.size)
                     if (read > 0) {
                         chunks.add(buffer.copyOfRange(0, read))
@@ -67,8 +70,8 @@ private class AudioCaptureThread(
                         throw RuntimeException("audioRecord.read returned $read")
                     }
                 }
-                audioRecord.stop()
             } finally {
+                try { audioRecord.stop() } catch (_: Exception) { }
                 audioRecord.release()
             }
         } catch (e: Exception) {
@@ -92,5 +95,7 @@ private class AudioCaptureThread(
 
     companion object {
         const val SAMPLE_RATE = 16000
+        private const val MAX_DURATION_SECONDS = 300 // 5 minutes
+        const val MAX_SAMPLES = SAMPLE_RATE * MAX_DURATION_SECONDS
     }
 }

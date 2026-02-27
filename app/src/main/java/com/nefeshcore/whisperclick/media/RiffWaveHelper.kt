@@ -30,6 +30,10 @@ fun decodeShortArray(shortArray: ShortArray, channel: Int): FloatArray {
 }
 
 fun encodeWaveFile(file: File, data: ShortArray) {
+    if (data.isEmpty()) {
+        file.writeBytes(ByteArray(0))
+        return
+    }
     file.outputStream().use {
         it.write(headerBytes(data.size * 2))
         val buffer = ByteBuffer.allocate(data.size * 2)
@@ -41,8 +45,19 @@ fun encodeWaveFile(file: File, data: ShortArray) {
     }
 }
 
-private fun headerBytes(totalLength: Int): ByteArray {
-    require(totalLength >= 44)
+fun encodeWaveBytes(data: ShortArray): ByteArray {
+    if (data.isEmpty()) return ByteArray(0)
+    val header = headerBytes(data.size * 2)
+    val buffer = ByteBuffer.allocate(data.size * 2)
+    buffer.order(ByteOrder.LITTLE_ENDIAN)
+    buffer.asShortBuffer().put(data)
+    val bytes = ByteArray(buffer.limit())
+    buffer.get(bytes)
+    return header + bytes
+}
+
+private fun headerBytes(dataLength: Int): ByteArray {
+    require(dataLength > 0) { "Audio data must not be empty" }
     ByteBuffer.allocate(44).apply {
         order(ByteOrder.LITTLE_ENDIAN)
 
@@ -51,7 +66,7 @@ private fun headerBytes(totalLength: Int): ByteArray {
         put('F'.code.toByte())
         put('F'.code.toByte())
 
-        putInt(totalLength - 8)
+        putInt(dataLength + 36) // file size minus RIFF header (8 bytes)
 
         put('W'.code.toByte())
         put('A'.code.toByte())
@@ -76,7 +91,7 @@ private fun headerBytes(totalLength: Int): ByteArray {
         put('t'.code.toByte())
         put('a'.code.toByte())
 
-        putInt(totalLength - 44)
+        putInt(dataLength) // raw audio data size
         position(0)
     }.also {
         val bytes = ByteArray(it.limit())

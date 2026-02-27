@@ -32,76 +32,74 @@ object GeminiClient : RewriteProvider {
 
     override suspend fun rewriteAll(apiKey: String, originalText: String): RewriteVariants {
         return withContext(Dispatchers.IO) {
-            try {
-                val prompt = """Rewrite the following text in 5 styles. Return ONLY valid JSON with no markdown formatting, no code fences, just the raw JSON object.
+            val prompt = """Rewrite the following text in 5 styles. Return ONLY valid JSON with no markdown formatting, no code fences, just the raw JSON object.
 
 Keys: "clean" (fix spelling, grammar, punctuation only), "professional", "casual", "concise", "emojify" (add relevant emojis).
 
 All style variants must be based on the clean version, not the original.
 
-Text: "$originalText""""
+---BEGIN USER TEXT---
+$originalText
+---END USER TEXT---"""
 
-                val response = callApi(apiKey, prompt)
-                if (response != null) {
-                    parseVariants(response, originalText)
-                } else {
-                    fallbackVariants(originalText)
-                }
-            } catch (e: Exception) {
-                AppLog.log("Gemini", "rewriteAll ERROR: ${e.javaClass.simpleName}: ${e.message}")
-                fallbackVariants(originalText)
-            }
+            val response = callApi(apiKey, prompt)
+                ?: throw Exception("Gemini API returned no response")
+            parseVariants(response, originalText)
         }
     }
 
     private fun callApi(apiKey: String, promptText: String): String? {
         val url = URL(API_URL)
         val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.setRequestProperty("x-goog-api-key", apiKey)
-        connection.connectTimeout = 15000
-        connection.readTimeout = 30000
-        connection.doOutput = true
+        try {
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("x-goog-api-key", apiKey)
+            connection.connectTimeout = 15000
+            connection.readTimeout = 30000
+            connection.doOutput = true
 
-        val jsonBody = JSONObject()
-        val contents = JSONArray()
-        val contentPart = JSONObject()
-        val parts = JSONArray()
-        val textPart = JSONObject()
+            val jsonBody = JSONObject()
+            val contents = JSONArray()
+            val contentPart = JSONObject()
+            val parts = JSONArray()
+            val textPart = JSONObject()
 
-        textPart.put("text", promptText)
-        parts.put(textPart)
-        contentPart.put("parts", parts)
-        contents.put(contentPart)
-        jsonBody.put("contents", contents)
+            textPart.put("text", promptText)
+            parts.put(textPart)
+            contentPart.put("parts", parts)
+            contents.put(contentPart)
+            jsonBody.put("contents", contents)
 
-        val writer = OutputStreamWriter(connection.outputStream)
-        writer.write(jsonBody.toString())
-        writer.flush()
+            val writer = OutputStreamWriter(connection.outputStream)
+            writer.write(jsonBody.toString())
+            writer.flush()
 
-        val responseCode = connection.responseCode
-        return if (responseCode == 200) {
-            val response = connection.inputStream.bufferedReader().use { it.readText() }
-            parseResponse(response)
-        } else {
-            val errorBody = try { connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "no body" } catch (_: Exception) { "unreadable" }
-            AppLog.log("Gemini", "HTTP $responseCode: $errorBody")
-            null
+            val responseCode = connection.responseCode
+            return if (responseCode == 200) {
+                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                parseResponse(response)
+            } else {
+                val errorBody = try { connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "no body" } catch (_: Exception) { "unreadable" }
+                AppLog.log("Gemini", "HTTP $responseCode: $errorBody")
+                null
+            }
+        } finally {
+            connection.disconnect()
         }
     }
 
-    private fun parseResponse(jsonResponse: String): String {
+    private fun parseResponse(jsonResponse: String): String? {
         return try {
             val json = JSONObject(jsonResponse)
             val candidates = json.getJSONArray("candidates")
             val content = candidates.getJSONObject(0).getJSONObject("content")
             val parts = content.getJSONArray("parts")
-            parts.getJSONObject(0).getString("text").trim()
+            parts.getJSONObject(0).getString("text").trim().ifEmpty { null }
         } catch (e: Exception) {
             AppLog.log("Gemini", "Parse error: ${e.message}")
             null
-        } ?: ""
+        }
     }
 
     private fun parseVariants(response: String, original: String): RewriteVariants {
