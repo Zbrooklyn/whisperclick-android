@@ -104,7 +104,6 @@ import kotlinx.coroutines.launch
 fun MainScreen(viewModel: MainScreenViewModel) {
     MainScreen(
         isRecording = viewModel.isRecording,
-        messageLog = viewModel.dataLog,
         onBenchmarkTapped = viewModel::benchmark,
         onRecordTapped = viewModel::toggleRecord
     )
@@ -114,7 +113,6 @@ fun MainScreen(viewModel: MainScreenViewModel) {
 @Composable
 private fun MainScreen(
     isRecording: Boolean,
-    messageLog: String,
     onBenchmarkTapped: () -> Unit,
     onRecordTapped: () -> Unit
 ) {

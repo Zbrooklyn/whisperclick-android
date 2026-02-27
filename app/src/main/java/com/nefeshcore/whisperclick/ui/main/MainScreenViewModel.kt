@@ -74,7 +74,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     }
 
     private suspend fun loadBaseModel() = withContext(Dispatchers.IO) {
-        printMessage("Loading model...\n")
         val models = application.assets.list("models/")
         if (models != null) {
             whisperContext =
@@ -186,6 +185,7 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
         CoroutineScope(Dispatchers.Default).launch { ctx?.release() }
         mediaPlayer?.release()
         mediaPlayer = null
+        recorder.release()
     }
 
     companion object {
